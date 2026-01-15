@@ -1,0 +1,10 @@
+.DS_Store
+.git
+.venv
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+test_logs
+uploads
+static/generated

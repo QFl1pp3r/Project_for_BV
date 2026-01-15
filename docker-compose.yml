@@ -1,0 +1,10 @@
+services:
+  vsosh:
+    build: .
+    ports:
+      - "5001:5000"
+    environment:
+      - FLASK_ENV=production
+    volumes:
+      - ./uploads:/app/uploads
+      - ./static/generated:/app/static/generated

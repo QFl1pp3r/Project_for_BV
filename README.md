@@ -59,7 +59,7 @@ python tools/generate_logs.py --mode dos > test_logs/demo_dos.log
 
 - Форматы логов: combined и common.
 - Расширения файлов: `.log`, `.txt` (лимит 15 MB).
-- Графики: запросы в минуту и топ‑IP.
+- Графики: запросы в минуту, таймлайн атак и топ‑IP.
 
 ## Структура проекта
 

@@ -5,6 +5,34 @@
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <title>Отчет</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <style>
+    body {
+      background: #f5f7fb;
+    }
+    .report-card {
+      border: 0;
+      border-radius: 14px;
+      box-shadow: 0 8px 24px rgba(18, 38, 63, 0.08);
+    }
+    .kpi {
+      font-weight: 700;
+      letter-spacing: 0.2px;
+    }
+    .chart-image {
+      display: block;
+      width: 100%;
+      height: auto;
+      max-height: 540px;
+      object-fit: contain;
+      border: 1px solid #e8ecf3;
+      border-radius: 10px;
+      background: #fff;
+    }
+    .badge-type {
+      font-size: 0.72rem;
+      letter-spacing: 0.2px;
+    }
+  </style>
 </head>
 <body>
 <div class="container py-4">
@@ -18,19 +46,19 @@
   <p class="text-muted">Короткая сводка по запросам и найденным инцидентам.</p>
 
   <div class="row g-3 mb-3">
-    <div class="col-md-3"><div class="card p-3"><div class="text-muted">Запросов</div><div class="h4">{{ summary.total_requests }}</div></div></div>
-    <div class="col-md-3"><div class="card p-3"><div class="text-muted">Уник. IP</div><div class="h4">{{ summary.unique_ips }}</div></div></div>
-    <div class="col-md-3"><div class="card p-3"><div class="text-muted">Инцидентов</div><div class="h4">{{ summary.incidents_total }}</div></div></div>
-    <div class="col-md-3"><div class="card p-3"><div class="text-muted">Период</div>
+    <div class="col-md-3"><div class="card report-card p-3"><div class="text-muted">Запросов</div><div class="h4 kpi">{{ summary.total_requests }}</div></div></div>
+    <div class="col-md-3"><div class="card report-card p-3"><div class="text-muted">Уник. IP</div><div class="h4 kpi">{{ summary.unique_ips }}</div></div></div>
+    <div class="col-md-3"><div class="card report-card p-3"><div class="text-muted">Инцидентов</div><div class="h4 kpi">{{ summary.incidents_total }}</div></div></div>
+    <div class="col-md-3"><div class="card report-card p-3"><div class="text-muted">Период</div>
       <div class="small">{{ summary.time_min }}<br>{{ summary.time_max }}</div></div></div>
   </div>
 
-  <div class="card p-3 mb-3">
+  <div class="card report-card p-3 mb-3">
     <h2 class="h5">Статистика по типам</h2>
     <div class="small">
       {% if counts %}
         {% for k, v in counts.items() %}
-          <span class="badge text-bg-secondary me-2">{{ k }}: {{ v }}</span>
+          <span class="badge rounded-pill text-bg-secondary me-2 badge-type">{{ k }}: {{ v }}</span>
         {% endfor %}
       {% else %}
         На данный момент инцидентов не найдено.
@@ -38,22 +66,30 @@
     </div>
   </div>
 
+  <div class="card report-card p-3 mb-3">
+    <h2 class="h6 mb-1">График атак</h2>
+    <p class="text-muted small mb-3">
+      Распределение rule-based инцидентов по времени и типу атаки.
+    </p>
+    <img class="chart-image" src="{{ chart_attacks }}" alt="Attack timeline chart">
+  </div>
+
   <div class="row g-3 mb-3">
     <div class="col-md-6">
-      <div class="card p-3">
+      <div class="card report-card p-3">
         <h2 class="h6">Нагрузка</h2>
-        <img class="img-fluid" src="{{ chart_rps }}" alt="RPS chart">
+        <img class="chart-image" src="{{ chart_rps }}" alt="RPS chart">
       </div>
     </div>
     <div class="col-md-6">
-      <div class="card p-3">
+      <div class="card report-card p-3">
         <h2 class="h6">Топ IP</h2>
-        <img class="img-fluid" src="{{ chart_topip }}" alt="Top IP chart">
+        <img class="chart-image" src="{{ chart_topip }}" alt="Top IP chart">
       </div>
     </div>
   </div>
 
-  <div class="card p-3">
+  <div class="card report-card p-3">
     <h2 class="h5">Инциденты </h2>
     <div class="table-responsive">
       <table class="table table-sm table-striped align-middle">
@@ -66,8 +102,19 @@
           {% if incidents %}
             {% for inc in incidents %}
             <tr>
-              <td>{{ inc.type }}</td>
-              <td>{{ inc.severity }}</td>
+              <td><span class="badge rounded-pill text-bg-dark badge-type">{{ inc.type }}</span></td>
+              <td>
+                {% set sev = (inc.severity or "")|upper %}
+                {% if sev == "HIGH" %}
+                  <span class="badge text-bg-danger">{{ inc.severity }}</span>
+                {% elif sev == "MEDIUM" %}
+                  <span class="badge text-bg-warning text-dark">{{ inc.severity }}</span>
+                {% elif sev == "LOW" %}
+                  <span class="badge text-bg-info text-dark">{{ inc.severity }}</span>
+                {% else %}
+                  <span class="badge text-bg-secondary">{{ inc.severity }}</span>
+                {% endif %}
+              </td>
               <td>{{ inc.ip }}</td>
               <td class="small">{{ inc.start_fmt }} — {{ inc.end_fmt }}</td>
               <td class="small">{{ inc.technique_id }} / {{ inc.technique }} ({{ inc.tactic }})</td>

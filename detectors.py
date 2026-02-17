@@ -14,6 +14,11 @@ MITRE = {
         "technique": "Exploit Public-Facing Application",
         "technique_id": "T1190",
     },
+    "XSS": {
+        "tactic": "Initial Access",
+        "technique": "Exploit Public-Facing Application",
+        "technique_id": "T1190",
+    },
     "DOS": {
         "tactic": "Impact",
         "technique": "Network Denial of Service",
@@ -37,6 +42,18 @@ SQLI_PATTERNS = [
 ]
 
 SQLI_RE = re.compile("|".join(SQLI_PATTERNS), flags=re.IGNORECASE)
+
+XSS_PATTERNS = [
+    r"<\s*script\b",
+    r"%3c\s*script\b",
+    r"javascript\s*:",
+    r"%3c\s*img\b[^>]*onerror\s*=",
+    r"\bon(?:error|load|click|mouseover|focus|mouseenter|animationstart)\s*=",
+    r"document\.cookie",
+    r"alert\s*\(",
+]
+
+XSS_RE = re.compile("|".join(XSS_PATTERNS), flags=re.IGNORECASE)
 
 LOGIN_PATHS = ("/login", "/signin", "/auth", "/admin", "/wp-login.php")
 
@@ -81,6 +98,25 @@ def detect_sqli(df: pd.DataFrame):
             "end": r["ts"],
             "evidence": f"suspected SQLi in URL: {r['path']}?{r['query']}"[:180],
             **MITRE["SQLI"],
+        })
+    return incidents
+
+# Сигнатурный поиск XSS в URL и query.
+def detect_xss(df: pd.DataFrame):
+    s = (df["path"].fillna("") + "?" + df["query"].fillna("")).astype(str)
+    mask = s.str.contains(XSS_RE, na=False)
+    hits = df[mask].copy()
+
+    incidents = []
+    for _, r in hits.iterrows():
+        incidents.append({
+            "type": "XSS",
+            "severity": "HIGH",
+            "ip": r["ip"],
+            "start": r["ts"],
+            "end": r["ts"],
+            "evidence": f"suspected XSS payload in URL: {r['path']}?{r['query']}"[:180],
+            **MITRE["XSS"],
         })
     return incidents
 
@@ -145,6 +181,7 @@ def correlate_anomalies(df: pd.DataFrame, anomalies: list[dict]) -> list[dict]:
     Пытаемся объяснить ML-анномалии через правила:
     - если в том же окне есть brute-force признаки → ANOMALY_BRUTE_FORCE + MITRE T1110
     - если в окне есть SQLi-сигнатуры → ANOMALY_SQLI + MITRE T1190
+    - если в окне есть XSS-сигнатуры → ANOMALY_XSS + MITRE T1190
     - если в окне глобально DoS → ANOMALY_DOS + MITRE T1498
     Иначе: ANOMALY_GENERIC
     """
@@ -171,7 +208,11 @@ def correlate_anomalies(df: pd.DataFrame, anomalies: list[dict]) -> list[dict]:
     sqli_hits = d[s.str.contains(SQLI_RE, na=False)]
     sqli_idx = set(sqli_hits[["ip", "window"]].itertuples(index=False, name=None))
 
-    # 3) Окна DoS глобально (без IP)
+    # 3) Окна, где встречались XSS-сигнатуры
+    xss_hits = d[s.str.contains(XSS_RE, na=False)]
+    xss_idx = set(xss_hits[["ip", "window"]].itertuples(index=False, name=None))
+
+    # 4) Окна DoS глобально (без IP)
     dos_win = set(
         _window(df, 1).groupby("window").size().reset_index(name="c")
         .query("c >= 200")["window"]
@@ -197,6 +238,12 @@ def correlate_anomalies(df: pd.DataFrame, anomalies: list[dict]) -> list[dict]:
                  "severity": "HIGH",
                  **MITRE["SQLI"],
                  "evidence": a["evidence"] + " | correlated: sqli signature"}
+        elif key in xss_idx:
+            a = {**a,
+                 "type": "ANOMALY_XSS",
+                 "severity": "HIGH",
+                 **MITRE["XSS"],
+                 "evidence": a["evidence"] + " | correlated: xss signature"}
         elif w in dos_win:
             a = {**a,
                  "type": "ANOMALY_DOS",
@@ -265,6 +312,7 @@ def deduplicate_incidents(rule_incidents: list[dict], anomaly_incidents: list[di
 def run_all(df: pd.DataFrame):
     rule_incidents = []
     rule_incidents += detect_sqli(df)
+    rule_incidents += detect_xss(df)
     rule_incidents += detect_bruteforce(df)
     rule_incidents += detect_dos(df)
 

@@ -12,6 +12,7 @@ FIG_SIZE = (12, 5)
 FIG_DPI = 150
 ATTACK_COLORS = {
     "SQLI": "#D7263D",
+    "XSS": "#E76F51",
     "BRUTE_FORCE": "#F4A259",
     "DOS": "#7B2CBF",
 }

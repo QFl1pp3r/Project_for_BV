@@ -12,6 +12,7 @@ UA_TOOLS = [
     "curl/8.0",
     "python-requests/2.31",
     "sqlmap/1.7",
+    "XSS-Scanner/1.0",
 ]
 
 PATHS = [
@@ -30,6 +31,13 @@ SQLI_PAYLOADS = [
     "/api/items?search=' UNION SELECT password FROM users--",
     "/index.html?q=1%27%20AND%20SLEEP(2)--",
     "/api/items?id=1%27%20OR%20%271%27=%271",
+]
+
+XSS_PAYLOADS = [
+    "/search?q=%3Cscript%3Ealert(1)%3C/script%3E",
+    "/comments?text=%3Cimg%20src=x%20onerror=alert(1)%3E",
+    "/profile?name=%22%3E%3Csvg%20onload=alert(document.cookie)%3E",
+    "/redirect?next=javascript:alert(1)",
 ]
 
 def fmt_time(ts: datetime) -> str:
@@ -102,6 +110,17 @@ def attack_sqli(lines, fmt, start_ts, count, ip):
         ts += timedelta(seconds=3)
     return ts
 
+def attack_xss(lines, fmt, start_ts, count, ip):
+    ts = start_ts
+    for _ in range(count):
+        url = random.choice(XSS_PAYLOADS)
+        status = random.choice([200, 200, 400, 403])
+        size = random.randint(120, 900)
+        ua = "XSS-Scanner/1.0"
+        lines.append(emit_line(fmt, ts, ip, "GET", url, status, size, ua))
+        ts += timedelta(seconds=3)
+    return ts
+
 def attack_dos(lines, fmt, start_ts, seconds, rps, ip_pool, burst=True):
     """
     DoS-атака: короткий интенсивный всплеск.
@@ -134,7 +153,7 @@ def attack_dos(lines, fmt, start_ts, seconds, rps, ip_pool, burst=True):
 def main():
     ap = argparse.ArgumentParser(description="Log generator for VSOSH demo")
     ap.add_argument("--format", choices=["combined", "common"], default="combined", help="Log format")
-    ap.add_argument("--mode", choices=["normal", "bruteforce", "scanning", "sqli", "dos", "mixed"], default="mixed")
+    ap.add_argument("--mode", choices=["normal", "bruteforce", "scanning", "sqli", "xss", "dos", "mixed"], default="mixed")
     ap.add_argument("--seed", type=int, default=42)
     ap.add_argument("--tz", type=int, default=3, help="Timezone offset hours (default +3)")
 
@@ -147,6 +166,7 @@ def main():
     ap.add_argument("--bf-seconds", type=int, default=90)
     ap.add_argument("--scan-seconds", type=int, default=90)
     ap.add_argument("--sqli-count", type=int, default=8)
+    ap.add_argument("--xss-count", type=int, default=8)
     ap.add_argument("--dos-seconds", type=int, default=20)
     ap.add_argument("--dos-rps", type=int, default=350)
 
@@ -154,7 +174,7 @@ def main():
     random.seed(args.seed)
 
     tz = timezone(timedelta(hours=args.tz))
-    start = datetime.now(tz) - timedelta(minutes=args.warmup_min + args.gap_min * 4 + args.tail_min + 2)
+    start = datetime.now(tz) - timedelta(minutes=args.warmup_min + args.gap_min * 5 + args.tail_min + 2)
 
     ips_normal = [f"192.168.1.{i}" for i in range(10, 60)]
     attacker_ip = "45.133.12.77"
@@ -182,6 +202,10 @@ def main():
         ts = attack_sqli(lines, args.format, ts, args.sqli_count, attacker_ip)
         ts = idle_gap(lines, args.format, ts, args.tail_min, ips_normal)
 
+    elif args.mode == "xss":
+        ts = attack_xss(lines, args.format, ts, args.xss_count, attacker_ip)
+        ts = idle_gap(lines, args.format, ts, args.tail_min, ips_normal)
+
     elif args.mode == "dos":
         ts = attack_dos(lines, args.format, ts, args.dos_seconds, args.dos_rps, dos_pool, burst=True)
         ts = idle_gap(lines, args.format, ts, args.tail_min, ips_normal)
@@ -199,7 +223,11 @@ def main():
         ts = attack_sqli(lines, args.format, ts, args.sqli_count, attacker_ip)
         ts = idle_gap(lines, args.format, ts, args.gap_min, ips_normal)
 
-        # 5) DoS burst (короткий пик по RPS)
+        # 5) XSS (несколько инъекционных payload в URL/query)
+        ts = attack_xss(lines, args.format, ts, args.xss_count, attacker_ip)
+        ts = idle_gap(lines, args.format, ts, args.gap_min, ips_normal)
+
+        # 6) DoS burst (короткий пик по RPS)
         ts = attack_dos(lines, args.format, ts, args.dos_seconds, args.dos_rps, dos_pool, burst=True)
         ts = idle_gap(lines, args.format, ts, args.tail_min, ips_normal)
 

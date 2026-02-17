@@ -1,7 +1,7 @@
 # Интелектуальный Аналайзер логов
 
 Минимальный веб‑анализатор access‑логов (Nginx/Apache) с простыми детекторами:
-Brute Force, SQLi, DoS и ML‑аномалии. Результат — HTML‑отчет и CSV со списком инцидентов.
+Brute Force, SQLi, XSS, DoS и ML‑аномалии. Результат — HTML‑отчет и CSV со списком инцидентов.
 
 ## Быстрый старт
 
@@ -48,6 +48,9 @@ python tools/generate_logs.py --mode bruteforce > test_logs/demo_bruteforce.log
 
 # Только SQLi
 python tools/generate_logs.py --mode sqli > test_logs/demo_sqli.log
+
+# Только XSS
+python tools/generate_logs.py --mode xss > test_logs/demo_xss.log
 
 # Только DoS
 python tools/generate_logs.py --mode dos > test_logs/demo_dos.log

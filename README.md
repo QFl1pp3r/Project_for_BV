@@ -1,7 +1,7 @@
 # Интелектуальный Аналайзер логов
 
 Минимальный веб‑анализатор access‑логов (Nginx/Apache) с простыми детекторами:
-Brute Force, SQLi, XSS, DoS и ML‑аномалии. Результат — HTML‑отчет и CSV со списком инцидентов.
+Brute Force, SQLi, XSS, DoS и ML‑аномалии. Результат — HTML‑отчет, CSV со списком инцидентов и история сохраненных анализов.
 
 ## Быстрый старт
 
@@ -63,6 +63,7 @@ python tools/generate_logs.py --mode dos > test_logs/demo_dos.log
 - Форматы логов: combined и common.
 - Расширения файлов: `.log`, `.txt` (лимит 15 MB).
 - Графики: запросы в минуту, таймлайн атак и топ‑IP.
+- История анализов: повторное открытие отчетов, скачивание CSV, удаление одного анализа или очистка всей истории.
 
 ## Структура проекта
 
@@ -70,6 +71,7 @@ python tools/generate_logs.py --mode dos > test_logs/demo_dos.log
 - `parser.py` — парсер строк access‑лога.
 - `detectors.py` — правила детекторов и ML‑аномалии.
 - `report.py` — построение графиков и экспорт CSV.
+- `history_store.py` — JSON‑хранилище истории анализов.
 - `templates/` — HTML‑шаблоны.
 - `tools/generate_logs.py` — генератор тестовых логов.
 - `test_logs/` — примеры логов.
@@ -77,3 +79,4 @@ python tools/generate_logs.py --mode dos > test_logs/demo_dos.log
 ## Заметки
 
 - Сгенерированные графики и CSV лежат в `static/generated/`.
+- История анализов хранится в `data/analysis_history.json`.

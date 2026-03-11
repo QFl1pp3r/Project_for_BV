@@ -32,15 +32,34 @@
       font-size: 0.72rem;
       letter-spacing: 0.2px;
     }
+    .meta-line {
+      color: #6c757d;
+      font-size: 0.95rem;
+    }
   </style>
 </head>
 <body>
 <div class="container py-4">
-  <div class="d-flex justify-content-between align-items-center mb-3">
-    <h1 class="h3">Отчет анализа</h1>
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+      {% for category, message in messages %}
+        <div class="alert alert-{{ category if category != 'message' else 'warning' }}">{{ message }}</div>
+      {% endfor %}
+    {% endif %}
+  {% endwith %}
+
+  <div class="d-flex justify-content-between align-items-start mb-3 flex-wrap gap-3">
     <div>
-      <a class="btn btn-outline-secondary" href="/">Назад</a>
+      <h1 class="h3 mb-1">Отчет анализа</h1>
+      <div class="meta-line">Файл: {{ source_name }}</div>
+      <div class="meta-line">Сохранен: {{ created_at_fmt }} | Размер: {{ size_fmt }}</div>
+    </div>
+    <div class="d-flex flex-wrap gap-2">
+      <a class="btn btn-outline-secondary" href="{{ history_url }}">К истории</a>
       <a class="btn btn-success" href="{{ csv_url }}">Скачать CSV</a>
+      <form action="{{ delete_url }}" method="post" onsubmit="return confirm('Удалить этот анализ и связанные файлы?');">
+        <button class="btn btn-outline-danger">Удалить</button>
+      </form>
     </div>
   </div>
   <p class="text-muted">Короткая сводка по запросам и найденным инцидентам.</p>
@@ -90,7 +109,7 @@
   </div>
 
   <div class="card report-card p-3">
-    <h2 class="h5">Инциденты </h2>
+    <h2 class="h5">Инциденты</h2>
     <div class="table-responsive">
       <table class="table table-sm table-striped align-middle">
         <thead>

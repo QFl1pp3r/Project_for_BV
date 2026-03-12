@@ -1,11 +1,17 @@
-# Интелектуальный Аналайзер логов
+# Интеллектуальный анализатор access-логов
 
-Минимальный веб‑анализатор access‑логов (Nginx/Apache) с простыми детекторами:
-Brute Force, SQLi, XSS, DoS и ML‑аномалии. Результат — HTML‑отчет и CSV со списком инцидентов.
+Flask-приложение для анализа HTTP access-логов Nginx/Apache. Основной детектор теперь использует предобученную CatBoost-модель с 6 классами:
+
+- `NORMAL`
+- `SQLI`
+- `XSS`
+- `BRUTE_FORCE`
+- `DOS`
+- `ANOMALY`
+
+Regex-детекторы сохранены как baseline для валидации точности модели.
 
 ## Быстрый старт
-
-1) Установка зависимостей:
 
 ```bash
 python3 -m venv .venv
@@ -13,67 +19,71 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
+## Подготовка модели
 
-## Запуск приложение
+1. Сгенерировать датасет:
 
-1) Запуск локально на машине:
-Нужно изменить строчуку в app.py
-Затем прописать команду:
 ```bash
-python3 app.py 
+python3 tools/generate_dataset.py --output data/dataset.csv --total 120000
 ```
-Откройте в браузере: http://127.0.0.1:5000/
 
-2) Запуск с помощью докера:
+2. Обучить CatBoost:
+
+```bash
+python3 tools/train_model.py --dataset data/dataset.csv --output models/attack_detector.cbm --metrics models/metrics.json
+```
+
+После этого Flask-приложение будет использовать `models/attack_detector.cbm` как основной детектор.
+
+## Запуск приложения
+
+Локально:
+
+```bash
+python3 app.py
+```
+
+Открыть в браузере: `http://127.0.0.1:5000/`
+
+Docker:
 
 ```bash
 docker compose up --build
 ```
 
-Откройте в браузере: http://127.0.0.1:5001/
+Открыть в браузере: `http://127.0.0.1:5001/`
 
-## Как сгенерировать тестовые логи
-
-Генератор находится в `tools/generate_logs.py`. Он пишет в stdout, поэтому
-удобно перенаправить вывод в файл.
-
-Примеры:
+## Генерация тестовых логов
 
 ```bash
-# Смешанный сценарий (норма + атаки)
-python tools/generate_logs.py --mode mixed > test_logs/demo_mixed.log
-
-# Только brute force
-python tools/generate_logs.py --mode bruteforce > test_logs/demo_bruteforce.log
-
-# Только SQLi
-python tools/generate_logs.py --mode sqli > test_logs/demo_sqli.log
-
-# Только XSS
-python tools/generate_logs.py --mode xss > test_logs/demo_xss.log
-
-# Только DoS
-python tools/generate_logs.py --mode dos > test_logs/demo_dos.log
+python3 tools/generate_logs.py --mode mixed > test_logs/demo_mixed.log
+python3 tools/generate_logs.py --mode bruteforce > test_logs/demo_bf.log
+python3 tools/generate_logs.py --mode sqli > test_logs/demo_sqli.log
+python3 tools/generate_logs.py --mode xss > test_logs/demo_xss.log
+python3 tools/generate_logs.py --mode dos > test_logs/demo_dos.log
 ```
 
-После генерации загрузите файл через веб‑форму.
+## Что строится в отчете
 
-## Что поддерживается
+- KPI по логу и найденным инцидентам
+- таймлайн инцидентов
+- график нагрузки по минутам
+- топ IP
+- распределение confidence модели
+- сравнение `ML vs Regex`
+- таблица инцидентов с confidence и признаком совпадения с regex
 
-- Форматы логов: combined и common.
-- Расширения файлов: `.log`, `.txt` (лимит 15 MB).
-- Графики: запросы в минуту, таймлайн атак и топ‑IP.
+## Структура
 
-## Структура проекта
-
-- `app.py` — Flask‑приложение и маршруты.
-- `parser.py` — парсер строк access‑лога.
-- `detectors.py` — правила детекторов и ML‑аномалии.
-- `report.py` — построение графиков и экспорт CSV.
-- `templates/` — HTML‑шаблоны.
-- `tools/generate_logs.py` — генератор тестовых логов.
-- `test_logs/` — примеры логов.
-
-## Заметки
-
-- Сгенерированные графики и CSV лежат в `static/generated/`.
+- `app.py` — Flask и orchestration анализа
+- `parser.py` — парсер access-логов
+- `feature_engineering.py` — извлечение признаков
+- `ml_detector.py` — CatBoost inference
+- `accuracy.py` — сравнение ML и regex
+- `detectors.py` — regex baseline
+- `report.py` — генерация графиков и CSV
+- `tools/generate_dataset.py` — сборка обучающего датасета
+- `tools/train_model.py` — обучение CatBoost
+- `tools/generate_logs.py` — генератор демо-логов
+- `models/` — модель и метрики обучения
+- `data/` — датасеты

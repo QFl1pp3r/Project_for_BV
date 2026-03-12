@@ -1,0 +1,145 @@
+{
+  "trained_at": "2026-03-11T12:52:20.613675+00:00",
+  "dataset_path": "data/dataset.csv",
+  "train_size": 96000,
+  "test_size": 24000,
+  "iterations": 1000,
+  "depth": 8,
+  "learning_rate": 0.05,
+  "accuracy": 0.9997916666666666,
+  "macro_avg": {
+    "precision": 0.9997919267582188,
+    "recall": 0.9997916666666667,
+    "f1-score": 0.9997916665852865,
+    "support": 24000.0
+  },
+  "weighted_avg": {
+    "precision": 0.9997919267582189,
+    "recall": 0.9997916666666666,
+    "f1-score": 0.9997916665852864,
+    "support": 24000.0
+  },
+  "per_class": {
+    "NORMAL": {
+      "precision": 1.0,
+      "recall": 0.99875,
+      "f1-score": 0.9993746091307066,
+      "support": 4000.0
+    },
+    "SQLI": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1-score": 1.0,
+      "support": 4000.0
+    },
+    "XSS": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1-score": 1.0,
+      "support": 4000.0
+    },
+    "BRUTE_FORCE": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1-score": 1.0,
+      "support": 4000.0
+    },
+    "DOS": {
+      "precision": 0.9987515605493134,
+      "recall": 1.0,
+      "f1-score": 0.9993753903810119,
+      "support": 4000.0
+    },
+    "ANOMALY": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1-score": 1.0,
+      "support": 4000.0
+    }
+  },
+  "feature_importance": {
+    "special_char_ratio": 14.978584490255589,
+    "global_rps_1m": 12.122639367353012,
+    "path_depth": 10.069006064825034,
+    "ip_req_count_5m": 9.464800175820999,
+    "has_special_chars": 7.470402019822153,
+    "entropy": 6.783762034285083,
+    "query_length": 5.788205989273475,
+    "response_bytes": 5.229829579046174,
+    "is_login_path": 4.573292080555841,
+    "url_length": 4.3812472838147825,
+    "hour_of_day": 3.348817568687899,
+    "has_script_tags": 2.967351866466374,
+    "status_code": 2.7416913095022797,
+    "ip_error_rate_5m": 2.642824043196266,
+    "ip_unique_paths_5m": 2.2381421236082297,
+    "is_post": 1.1888766215201068,
+    "method_encoded": 1.1133434008831757,
+    "status_group": 0.9660332035580826,
+    "has_sql_keywords": 0.4707224154271439,
+    "has_encoded_chars": 0.3811781877137764,
+    "num_params": 0.32667224685115087,
+    "encoded_char_count": 0.3076260905973673,
+    "ip_login_fail_count_5m": 0.2520860875233951,
+    "has_common_attack_path": 0.16581910047224208,
+    "sql_keyword_count": 0.02704664894036579
+  },
+  "confusion_matrix": [
+    [
+      3995,
+      0,
+      0,
+      0,
+      5,
+      0
+    ],
+    [
+      0,
+      4000,
+      0,
+      0,
+      0,
+      0
+    ],
+    [
+      0,
+      0,
+      4000,
+      0,
+      0,
+      0
+    ],
+    [
+      0,
+      0,
+      0,
+      4000,
+      0,
+      0
+    ],
+    [
+      0,
+      0,
+      0,
+      0,
+      4000,
+      0
+    ],
+    [
+      0,
+      0,
+      0,
+      0,
+      0,
+      4000
+    ]
+  ],
+  "classes": [
+    "NORMAL",
+    "SQLI",
+    "XSS",
+    "BRUTE_FORCE",
+    "DOS",
+    "ANOMALY"
+  ]
+}

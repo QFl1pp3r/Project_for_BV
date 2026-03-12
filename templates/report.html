@@ -7,12 +7,12 @@
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
   <style>
     body {
-      background: #f5f7fb;
+      background: linear-gradient(180deg, #f4f7fb 0%, #eef2f7 100%);
     }
     .report-card {
       border: 0;
-      border-radius: 14px;
-      box-shadow: 0 8px 24px rgba(18, 38, 63, 0.08);
+      border-radius: 16px;
+      box-shadow: 0 12px 30px rgba(18, 38, 63, 0.08);
     }
     .kpi {
       font-weight: 700;
@@ -32,29 +32,43 @@
       font-size: 0.72rem;
       letter-spacing: 0.2px;
     }
+    .mono {
+      font-variant-numeric: tabular-nums;
+    }
   </style>
 </head>
 <body>
 <div class="container py-4">
   <div class="d-flex justify-content-between align-items-center mb-3">
-    <h1 class="h3">Отчет анализа</h1>
+    <div>
+      <h1 class="h3 mb-1">Отчет анализа</h1>
+      <p class="text-muted mb-0">ML-анализ access-лога с regex-валидацией.</p>
+    </div>
     <div>
       <a class="btn btn-outline-secondary" href="/">Назад</a>
       <a class="btn btn-success" href="{{ csv_url }}">Скачать CSV</a>
     </div>
   </div>
-  <p class="text-muted">Короткая сводка по запросам и найденным инцидентам.</p>
+
+  {% if model_error %}
+    <div class="alert alert-warning report-card">
+      <strong>ML-модель недоступна.</strong> {{ model_error }}.
+      Отчет построен в fallback-режиме по regex-детекторам.
+    </div>
+  {% endif %}
 
   <div class="row g-3 mb-3">
-    <div class="col-md-3"><div class="card report-card p-3"><div class="text-muted">Запросов</div><div class="h4 kpi">{{ summary.total_requests }}</div></div></div>
-    <div class="col-md-3"><div class="card report-card p-3"><div class="text-muted">Уник. IP</div><div class="h4 kpi">{{ summary.unique_ips }}</div></div></div>
-    <div class="col-md-3"><div class="card report-card p-3"><div class="text-muted">Инцидентов</div><div class="h4 kpi">{{ summary.incidents_total }}</div></div></div>
-    <div class="col-md-3"><div class="card report-card p-3"><div class="text-muted">Период</div>
-      <div class="small">{{ summary.time_min }}<br>{{ summary.time_max }}</div></div></div>
+    <div class="col-md-3"><div class="card report-card p-3"><div class="text-muted">Запросов</div><div class="h4 kpi mono">{{ summary.total_requests }}</div></div></div>
+    <div class="col-md-3"><div class="card report-card p-3"><div class="text-muted">Уник. IP</div><div class="h4 kpi mono">{{ summary.unique_ips }}</div></div></div>
+    <div class="col-md-3"><div class="card report-card p-3"><div class="text-muted">Инцидентов</div><div class="h4 kpi mono">{{ summary.incidents_total }}</div></div></div>
+    <div class="col-md-3"><div class="card report-card p-3"><div class="text-muted">Период</div><div class="small">{{ summary.time_min }}<br>{{ summary.time_max }}</div></div></div>
   </div>
 
   <div class="card report-card p-3 mb-3">
-    <h2 class="h5">Статистика по типам</h2>
+    <div class="d-flex justify-content-between align-items-center mb-2">
+      <h2 class="h5 mb-0">Статистика по типам</h2>
+      <span class="badge rounded-pill text-bg-dark">{{ "ML" if analysis_mode == "ml" else "REGEX FALLBACK" }}</span>
+    </div>
     <div class="small">
       {% if counts %}
         {% for k, v in counts.items() %}
@@ -67,10 +81,51 @@
   </div>
 
   <div class="card report-card p-3 mb-3">
+    <h2 class="h5">Точность модели</h2>
+    {% if accuracy %}
+      <div class="row g-3 mb-3">
+        <div class="col-md-2"><div class="border rounded-3 p-3 bg-light-subtle"><div class="text-muted small">Agreement</div><div class="h5 mono mb-0">{{ "%.1f%%"|format(accuracy.agreement_rate * 100) }}</div></div></div>
+        <div class="col-md-2"><div class="border rounded-3 p-3 bg-light-subtle"><div class="text-muted small">Precision</div><div class="h5 mono mb-0">{{ "%.1f%%"|format(accuracy.precision * 100) }}</div></div></div>
+        <div class="col-md-2"><div class="border rounded-3 p-3 bg-light-subtle"><div class="text-muted small">Recall</div><div class="h5 mono mb-0">{{ "%.1f%%"|format(accuracy.recall * 100) }}</div></div></div>
+        <div class="col-md-2"><div class="border rounded-3 p-3 bg-light-subtle"><div class="text-muted small">F1</div><div class="h5 mono mb-0">{{ "%.1f%%"|format(accuracy.f1 * 100) }}</div></div></div>
+        <div class="col-md-2"><div class="border rounded-3 p-3 bg-light-subtle"><div class="text-muted small">ML</div><div class="h5 mono mb-0">{{ accuracy.total_ml }}</div></div></div>
+        <div class="col-md-2"><div class="border rounded-3 p-3 bg-light-subtle"><div class="text-muted small">Regex</div><div class="h5 mono mb-0">{{ accuracy.total_regex }}</div></div></div>
+      </div>
+      <div class="row g-3">
+        <div class="col-md-6">
+          <div class="small text-muted mb-2">Найдено только ML: {{ accuracy.ml_only|length }}. Найдено только regex: {{ accuracy.regex_only|length }}. Пересечение: {{ accuracy.overlap }}.</div>
+        </div>
+      </div>
+      <div class="table-responsive mt-2">
+        <table class="table table-sm align-middle">
+          <thead>
+            <tr>
+              <th>Тип</th>
+              <th>ML</th>
+              <th>Regex</th>
+              <th>Overlap</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for attack_type, values in accuracy.per_type_comparison.items() %}
+              <tr>
+                <td><span class="badge rounded-pill text-bg-dark badge-type">{{ attack_type }}</span></td>
+                <td class="mono">{{ values.ml }}</td>
+                <td class="mono">{{ values.regex }}</td>
+                <td class="mono">{{ values.overlap }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <p class="text-muted mb-0">Метрики сравнения станут доступны после загрузки обученной CatBoost-модели.</p>
+    {% endif %}
+  </div>
+
+  <div class="card report-card p-3 mb-3">
     <h2 class="h6 mb-1">График атак</h2>
-    <p class="text-muted small mb-3">
-      Распределение rule-based инцидентов по времени и типу атаки.
-    </p>
+    <p class="text-muted small mb-3">Распределение детекций по времени и типу атаки.</p>
     <img class="chart-image" src="{{ chart_attacks }}" alt="Attack timeline chart">
   </div>
 
@@ -89,13 +144,35 @@
     </div>
   </div>
 
+  <div class="row g-3 mb-3">
+    <div class="col-md-6">
+      <div class="card report-card p-3">
+        <h2 class="h6">Confidence Distribution</h2>
+        <img class="chart-image" src="{{ chart_confidence }}" alt="Confidence chart">
+      </div>
+    </div>
+    <div class="col-md-6">
+      <div class="card report-card p-3">
+        <h2 class="h6">ML vs Regex</h2>
+        <img class="chart-image" src="{{ chart_comparison }}" alt="ML vs Regex chart">
+      </div>
+    </div>
+  </div>
+
   <div class="card report-card p-3">
-    <h2 class="h5">Инциденты </h2>
+    <h2 class="h5">Инциденты</h2>
     <div class="table-responsive">
       <table class="table table-sm table-striped align-middle">
         <thead>
           <tr>
-            <th>Тип</th><th>Severity</th><th>IP</th><th>Время</th><th>MITRE</th><th>Доказательства</th>
+            <th>Тип</th>
+            <th>Severity</th>
+            <th>Confidence</th>
+            <th>Regex</th>
+            <th>IP</th>
+            <th>Время</th>
+            <th>MITRE</th>
+            <th>Доказательства</th>
           </tr>
         </thead>
         <tbody>
@@ -115,15 +192,25 @@
                   <span class="badge text-bg-secondary">{{ inc.severity }}</span>
                 {% endif %}
               </td>
+              <td class="small mono">{{ inc.confidence_fmt or "n/a" }}</td>
+              <td class="text-center">
+                {% if inc.regex_match is sameas true %}
+                  <span class="text-success">&#10003;</span>
+                {% elif inc.regex_match is sameas false %}
+                  <span class="text-danger">&#10007;</span>
+                {% else %}
+                  <span class="text-muted">n/a</span>
+                {% endif %}
+              </td>
               <td>{{ inc.ip }}</td>
-              <td class="small">{{ inc.start_fmt }} — {{ inc.end_fmt }}</td>
+              <td class="small">{{ inc.start_fmt }}<br>{{ inc.end_fmt }}</td>
               <td class="small">{{ inc.technique_id }} / {{ inc.technique }} ({{ inc.tactic }})</td>
               <td class="small">{{ inc.evidence }}</td>
             </tr>
             {% endfor %}
           {% else %}
             <tr>
-              <td colspan="6" class="text-muted">Пока ничего подозрительного не найдено.</td>
+              <td colspan="8" class="text-muted">Пока ничего подозрительного не найдено.</td>
             </tr>
           {% endif %}
         </tbody>

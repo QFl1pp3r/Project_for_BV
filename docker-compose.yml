@@ -1,5 +1,5 @@
 services:
-  vsosh:
+  bv_app:
     build: .
     ports:
       - "5001:5000"

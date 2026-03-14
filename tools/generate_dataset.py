@@ -10,6 +10,7 @@ import argparse
 import os
 import random
 import sys
+from collections import Counter
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Optional
@@ -18,10 +19,17 @@ import pandas as pd
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from feature_engineering import extract_features
-from parser import parse_line
+from config import ATTACK_LABELS
+from core.feature_engineering import extract_features
+from core.parser import parse_line
 
-LABELS = ["NORMAL", "SQLI", "XSS", "BRUTE_FORCE", "DOS", "ANOMALY"]
+from tools.data_for_generators import (UA_NORMAL, UA_TOOLS, UA_BOTS,
+                   PUBLIC_PAGE_PATHS, CATALOG_PATHS, API_READ_PATHS,
+                   STATIC_PATHS, BENIGN_EDGE_PATHS, NORMAL_PATHS,
+                   LOGIN_PATHS, DOS_PATHS, SQLI_PAYLOADS, XSS_PAYLOADS,
+                   SCAN_PATHS)
+
+LABELS = list(ATTACK_LABELS)
 CLASS_PROFILES = {
     "balanced": {
         "NORMAL": 1.0,
@@ -40,128 +48,6 @@ CLASS_PROFILES = {
         "ANOMALY": 0.05,
     },
 }
-
-UA_NORMAL = [
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36",
-    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36",
-    "Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X)",
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-    "Mozilla/5.0 (iPad; CPU OS 15_0 like Mac OS X)",
-]
-UA_TOOLS = [
-    "curl/8.0",
-    "python-requests/2.31",
-    "sqlmap/1.7",
-    "XSS-Scanner/1.0",
-    "Nikto/2.1.6",
-    "Go-http-client/1.1",
-]
-PUBLIC_PAGE_PATHS = [
-    "/",
-    "/index.html",
-    "/about",
-    "/contact",
-    "/docs",
-    "/help",
-    "/faq",
-    "/blog/post/123",
-    "/blog/post/456",
-    "/profile",
-    "/settings",
-]
-CATALOG_PATHS = [
-    "/products",
-    "/products?category=electronics",
-    "/products?category=books",
-    "/search?q=laptop",
-    "/search?q=phone",
-    "/api/search?q=laptop",
-    "/cart",
-    "/checkout",
-]
-API_READ_PATHS = [
-    "/api/items",
-    "/api/items?page=1",
-    "/api/items?page=2&limit=20",
-    "/api/users",
-    "/api/users/me",
-    "/api/search",
-]
-STATIC_PATHS = [
-    "/static/app.js",
-    "/static/site.css",
-    "/images/logo.png",
-    "/favicon.ico",
-    "/robots.txt",
-    "/sitemap.xml",
-]
-BENIGN_EDGE_PATHS = [
-    "/admin",
-    "/admin/login",
-    "/search?q=union+square+hotel",
-    "/search?q=select+phone",
-    "/docs/sql/select-basics",
-    "/docs/frontend/onload-events",
-    "/api/search?q=script+tag+tutorial",
-    "/products?sort=order+by+price",
-    "/search?q=%3C3+sale",
-]
-NORMAL_PATHS = PUBLIC_PAGE_PATHS + CATALOG_PATHS + API_READ_PATHS + STATIC_PATHS + BENIGN_EDGE_PATHS
-LOGIN_PATHS = ["/login", "/admin", "/signin", "/wp-login.php", "/auth", "/auth/login", "/account/login"]
-DOS_PATHS = ["/api/items", "/api/items?page=1", "/api/search", "/"]
-
-SQLI_PAYLOADS = [
-    "/products?id=1%20OR%201=1",
-    "/products?id=1' OR '1'='1",
-    "/api/items?search=' UNION SELECT password FROM users--",
-    "/api/items?search=' UNION SELECT username,password FROM users--",
-    "/index.html?q=1' AND SLEEP(2)--",
-    "/products?id=1; DROP TABLE users--",
-    "/api/users?name=' OR 1=1#",
-    "/products?sort=name; SELECT * FROM information_schema.tables--",
-    "/api/items?filter=1' UNION SELECT null,null,null--",
-    "/api/data?id=1' AND BENCHMARK(5000000,MD5('test'))--",
-    "/products?category=1' AND EXTRACTVALUE(1,CONCAT(0x7e,(SELECT version())))--",
-    "/api/items?q=1%27%20UNION%20SELECT%20load_file('/etc/passwd')--",
-    "/api/v2/items?id=1;EXEC+xp_cmdshell('dir')",
-    "/search?q=1' HAVING 1=1--",
-    "/api/items?sort=1' ORDER BY 10--",
-]
-XSS_PAYLOADS = [
-    "/search?q=<script>alert(1)</script>",
-    "/search?q=%3Cscript%3Ealert(1)%3C/script%3E",
-    "/comments?text=<img src=x onerror=alert(1)>",
-    "/comments?text=%3Cimg%20src=x%20onerror=alert(1)%3E",
-    "/profile?name=\"><svg onload=alert(document.cookie)>",
-    "/redirect?next=javascript:alert(1)",
-    "/search?q=<body onload=alert('xss')>",
-    "/search?q=<iframe src='javascript:alert(1)'>",
-    "/comments?text=<svg/onload=alert('XSS')>",
-    "/api/name?v=<details open ontoggle=alert(1)>",
-    "/profile?name=<input onfocus=alert(1) autofocus>",
-    "/comments?msg=<a href=javascript:alert(1)>click</a>",
-    "/page?content=<div onmouseover=alert(1)>hover</div>",
-]
-SCAN_PATHS = [
-    "/.env",
-    "/wp-admin",
-    "/phpmyadmin",
-    "/backup.zip",
-    "/config",
-    "/server-status",
-    "/.git/config",
-    "/db.sql",
-    "/admin.php",
-    "/.htaccess",
-    "/wp-config.php",
-    "/etc/passwd",
-    "/../../../etc/shadow",
-    "/proc/self/environ",
-    "/api/debug",
-    "/console",
-    "/actuator/health",
-    "/swagger.json",
-]
 
 
 def fmt_time(ts: datetime) -> str:
@@ -215,8 +101,8 @@ def _diurnal_weight(hour: int) -> float:
 def _sample_normal_request(rng: random.Random) -> tuple[str, str, int, int, str]:
     """Sample a benign request with endpoint-aware method/status combinations."""
     profile = rng.choices(
-        ["page", "catalog", "api", "static", "auth", "edge"],
-        weights=[29, 19, 17, 15, 12, 8],
+        ["page", "catalog", "api", "static", "auth", "edge", "bot", "api_pagination"],
+        weights=[24, 16, 14, 12, 10, 10, 8, 6],
     )[0]
 
     if profile == "page":
@@ -224,36 +110,62 @@ def _sample_normal_request(rng: random.Random) -> tuple[str, str, int, int, str]
         method = rng.choices(["GET", "HEAD"], weights=[95, 5])[0]
         status = rng.choices([200, 301, 404, 500], weights=[86, 7, 5, 2])[0]
         size = rng.randint(1200, 26000)
+        ua = rng.choice(UA_NORMAL)
     elif profile == "catalog":
         path = rng.choice(CATALOG_PATHS)
         method = rng.choices(["GET", "POST"], weights=[93, 7])[0]
         status = rng.choices([200, 200, 301, 404, 500], weights=[73, 12, 7, 6, 2])[0]
         size = rng.randint(500, 22000)
+        ua = rng.choice(UA_NORMAL)
     elif profile == "api":
         path = rng.choice(API_READ_PATHS)
         method = rng.choices(["GET", "HEAD"], weights=[97, 3])[0]
         status = rng.choices([200, 304, 404, 500], weights=[82, 7, 8, 3])[0]
         size = rng.randint(250, 12000)
+        ua = rng.choice(UA_NORMAL)
     elif profile == "static":
         path = rng.choice(STATIC_PATHS)
         method = rng.choices(["GET", "HEAD"], weights=[90, 10])[0]
         status = rng.choices([200, 304, 404], weights=[77, 18, 5])[0]
         size = rng.randint(180, 24000)
+        ua = rng.choice(UA_NORMAL)
     elif profile == "auth":
-        path = rng.choice(LOGIN_PATHS + ["/profile", "/checkout"])
+        path = rng.choice(list(LOGIN_PATHS) + ["/profile", "/checkout"])
         method = rng.choices(["GET", "POST"], weights=[58, 42])[0]
         if method == "POST":
             status = rng.choices([200, 302, 401, 403, 429], weights=[40, 28, 20, 8, 4])[0]
         else:
             status = rng.choices([200, 302, 404], weights=[82, 13, 5])[0]
         size = rng.randint(250, 9000)
+        ua = rng.choice(UA_NORMAL)
+    elif profile == "bot":
+        # Legitimate bot/crawler traffic — hits many paths including admin-like ones
+        all_crawlable = PUBLIC_PAGE_PATHS + CATALOG_PATHS + API_READ_PATHS + [
+            "/admin", "/admin/login", "/config/public", "/health", "/status",
+            "/actuator/info", "/server-status", "/robots.txt", "/sitemap.xml",
+        ]
+        path = rng.choice(all_crawlable)
+        method = "GET"
+        status = rng.choices([200, 301, 304, 404], weights=[70, 12, 10, 8])[0]
+        size = rng.randint(200, 18000)
+        ua = rng.choice(UA_BOTS)
+    elif profile == "api_pagination":
+        # Legitimate sequential API pagination
+        page = rng.randint(1, 50)
+        limit = rng.choice([10, 20, 50, 100])
+        path = f"/api/items?page={page}&limit={limit}"
+        method = "GET"
+        status = rng.choices([200, 200, 304], weights=[80, 12, 8])[0]
+        size = rng.randint(2000, 50000)
+        ua = rng.choice(UA_NORMAL)
     else:
         path = rng.choice(BENIGN_EDGE_PATHS)
         method = rng.choices(["GET", "POST"], weights=[90, 10])[0]
         status = rng.choices([200, 200, 301, 404], weights=[63, 17, 12, 8])[0]
         size = rng.randint(350, 14000)
+        ua = rng.choice(UA_NORMAL)
 
-    return path, method, status, size, rng.choice(UA_NORMAL)
+    return path, method, status, size, ua
 
 
 def gen_normal_records(count: int, start_ts: datetime, ips: list[str], rng: random.Random) -> list[tuple[str, str]]:
@@ -294,9 +206,11 @@ def gen_sqli_records(count: int, start_ts: datetime, ips: list[str], rng: random
     for _ in range(count):
         url = rng.choice(SQLI_PAYLOADS)
         status = rng.choices([200, 400, 403, 500], weights=[20, 30, 15, 35])[0]
+        # 20% of attacks use normal browser UAs to simulate manual testing
+        ua = rng.choice(UA_NORMAL) if rng.random() < 0.2 else rng.choice(UA_TOOLS)
         records.append(
             (
-                make_log_line(ts, rng.choice(ips), rng.choice(["GET", "POST"]), url, status, rng.randint(120, 1800), rng.choice(UA_TOOLS)),
+                make_log_line(ts, rng.choice(ips), rng.choice(["GET", "POST"]), url, status, rng.randint(120, 1800), ua),
                 "SQLI",
             )
         )
@@ -310,9 +224,10 @@ def gen_xss_records(count: int, start_ts: datetime, ips: list[str], rng: random.
     for _ in range(count):
         url = rng.choice(XSS_PAYLOADS)
         status = rng.choices([200, 400, 403], weights=[50, 30, 20])[0]
+        ua = rng.choice(UA_NORMAL) if rng.random() < 0.2 else rng.choice(UA_TOOLS)
         records.append(
             (
-                make_log_line(ts, rng.choice(ips), rng.choice(["GET", "POST"]), url, status, rng.randint(120, 1800), rng.choice(UA_TOOLS)),
+                make_log_line(ts, rng.choice(ips), rng.choice(["GET", "POST"]), url, status, rng.randint(120, 1800), ua),
                 "XSS",
             )
         )
@@ -369,63 +284,113 @@ def gen_dos_records(count: int, start_ts: datetime, ips: list[str], rng: random.
     return records
 
 
-def gen_mixed_attack_campaign(
-    count: int, start_ts: datetime, attacker_ip: str, rng: random.Random
-) -> list[tuple[str, str]]:
-    """Simulate a realistic multi-technique attack campaign from a single IP.
+def _build_attack_record(
+    attack_type: str,
+    ts: datetime,
+    attacker_ip: str,
+    rng: random.Random,
+) -> tuple[str, str]:
+    if attack_type == "SQLI":
+        url = rng.choice(SQLI_PAYLOADS)
+        status = rng.choices([200, 400, 403, 500], weights=[20, 30, 15, 35])[0]
+        method = rng.choice(["GET", "POST"])
+        size = rng.randint(120, 1800)
+    elif attack_type == "XSS":
+        url = rng.choice(XSS_PAYLOADS)
+        status = rng.choices([200, 400, 403], weights=[50, 30, 20])[0]
+        method = rng.choice(["GET", "POST"])
+        size = rng.randint(120, 1800)
+    elif attack_type == "BRUTE_FORCE":
+        url = rng.choice(LOGIN_PATHS)
+        status = rng.choices([401, 403], weights=[75, 25])[0]
+        method = "POST"
+        size = rng.randint(200, 900)
+    else:  # ANOMALY / recon
+        url = rng.choice(SCAN_PATHS)
+        status = rng.choice([400, 403, 403, 404, 500])
+        method = "GET"
+        size = rng.randint(80, 700)
 
-    An attacker typically probes with several methods (e.g. SQLI → XSS → recon)
-    within a concentrated time window.  This function generates bursts of 2–3
-    attack types interleaved within that window so the resulting log rows have
-    naturally overlapping timestamps with the surrounding normal traffic.
+    ua = rng.choice(UA_NORMAL) if rng.random() < 0.15 else rng.choice(UA_TOOLS)
+    return make_log_line(ts, attacker_ip, method, url, status, size, ua), attack_type
+
+
+def gen_mixed_attack_campaign_from_plan(
+    attack_plan: list[str],
+    start_ts: datetime,
+    attacker_ip: str,
+    rng: random.Random,
+) -> list[tuple[str, str]]:
+    """Generate a mixed campaign from an exact label plan.
+
+    The plan preserves exact per-class counts while still emitting traffic in
+    short tactical bursts of 2-3 attack types per campaign.
     """
     records: list[tuple[str, str]] = []
     ts = start_ts
-    remaining = count
+    remaining_counts = Counter(attack_plan)
 
-    # Each campaign uses 2–3 attack types chosen without replacement.
-    n_types = rng.randint(2, 3)
-    attack_types = rng.sample(["SQLI", "XSS", "BRUTE_FORCE", "ANOMALY"], k=n_types)
-
-    while remaining > 0:
-        attack_type = rng.choice(attack_types)
-        burst = min(rng.randint(3, 12), remaining)
+    while sum(remaining_counts.values()) > 0:
+        available_types = [label for label, count in remaining_counts.items() if count > 0]
+        attack_type = rng.choice(available_types)
+        burst = min(rng.randint(3, 12), remaining_counts[attack_type])
 
         for _ in range(burst):
-            if attack_type == "SQLI":
-                url = rng.choice(SQLI_PAYLOADS)
-                status = rng.choices([200, 400, 403, 500], weights=[20, 30, 15, 35])[0]
-                method = rng.choice(["GET", "POST"])
-                size = rng.randint(120, 1800)
-            elif attack_type == "XSS":
-                url = rng.choice(XSS_PAYLOADS)
-                status = rng.choices([200, 400, 403], weights=[50, 30, 20])[0]
-                method = rng.choice(["GET", "POST"])
-                size = rng.randint(120, 1800)
-            elif attack_type == "BRUTE_FORCE":
-                url = rng.choice(LOGIN_PATHS)
-                status = rng.choices([401, 403], weights=[75, 25])[0]
-                method = "POST"
-                size = rng.randint(200, 900)
-            else:  # ANOMALY / recon
-                url = rng.choice(SCAN_PATHS)
-                status = rng.choice([400, 403, 403, 404, 500])
-                method = "GET"
-                size = rng.randint(80, 700)
-
-            records.append(
-                (
-                    make_log_line(ts, attacker_ip, method, url, status, size, rng.choice(UA_TOOLS)),
-                    attack_type,
-                )
-            )
+            records.append(_build_attack_record(attack_type, ts, attacker_ip, rng))
             ts = _next_ts(ts, rng, 300, 4000)
-            remaining -= 1
+            remaining_counts[attack_type] -= 1
 
-        # Brief tactical pause between attack phases (5–90 s).
         ts += timedelta(seconds=rng.randint(5, 90))
 
     return records
+
+
+def gen_mixed_attack_campaign(
+    count: int,
+    start_ts: datetime,
+    attacker_ip: str,
+    rng: random.Random,
+) -> list[tuple[str, str]]:
+    """Backward-compatible helper that generates an exact random label plan."""
+    n_types = rng.randint(2, 3)
+    attack_types = rng.sample(["SQLI", "XSS", "BRUTE_FORCE", "ANOMALY"], k=n_types)
+    attack_plan = rng.choices(attack_types, k=count)
+    return gen_mixed_attack_campaign_from_plan(attack_plan, start_ts, attacker_ip, rng)
+
+
+def _allocate_mixed_attack_plan(
+    camp_size: int,
+    remaining_counts: dict[str, int],
+    rng: random.Random,
+) -> list[str]:
+    if camp_size <= 0:
+        return []
+
+    available = [label for label, count in remaining_counts.items() if count > 0]
+    if not available:
+        return []
+
+    target_types = min(len(available), rng.randint(2, 3))
+    campaign_types = rng.sample(available, k=target_types)
+    attack_plan: list[str] = []
+
+    while len(attack_plan) < camp_size:
+        active = [label for label in campaign_types if remaining_counts[label] > 0]
+        if not active:
+            active = [label for label, count in remaining_counts.items() if count > 0]
+            if not active:
+                break
+            refill = rng.sample(active, k=min(len(active), rng.randint(1, min(3, len(active)))))
+            for label in refill:
+                if label not in campaign_types:
+                    campaign_types.append(label)
+            active = [label for label in campaign_types if remaining_counts[label] > 0]
+
+        label = rng.choices(active, weights=[remaining_counts[item] for item in active], k=1)[0]
+        attack_plan.append(label)
+        remaining_counts[label] -= 1
+
+    return attack_plan
 
 
 def gen_anomaly_records(count: int, start_ts: datetime, ips: list[str], rng: random.Random) -> list[tuple[str, str]]:
@@ -435,6 +400,8 @@ def gen_anomaly_records(count: int, start_ts: datetime, ips: list[str], rng: ran
     while remaining > 0:
         ip = rng.choice(ips)
         mode = rng.choice(["scan", "path_traversal", "rapid_crawl"])
+        # 15% of anomaly traffic uses normal UAs (stealthy scanners)
+        ua_pool = UA_NORMAL if rng.random() < 0.15 else UA_TOOLS
         if mode == "scan":
             burst = min(rng.randint(10, 40), remaining)
             for _ in range(burst):
@@ -443,7 +410,7 @@ def gen_anomaly_records(count: int, start_ts: datetime, ips: list[str], rng: ran
                     path = f"{path}?id={rng.randint(1, 999)}"
                 records.append(
                     (
-                        make_log_line(ts, ip, "GET", path, rng.choice([403, 404, 404, 500]), rng.randint(80, 700), rng.choice(UA_TOOLS)),
+                        make_log_line(ts, ip, "GET", path, rng.choice([403, 404, 404, 500]), rng.randint(80, 700), rng.choice(ua_pool)),
                         "ANOMALY",
                     )
                 )
@@ -456,17 +423,24 @@ def gen_anomaly_records(count: int, start_ts: datetime, ips: list[str], rng: ran
                 "/api/file?name=../../etc/shadow",
                 "/download?path=../../../config/db.yml",
                 "/static/../../proc/self/environ",
+                "/../../../etc/hosts",
+                "/api/file?name=../../var/log/auth.log",
+                "/download?path=../../../.ssh/id_rsa",
+                "/images/../../../etc/resolv.conf",
+                "/assets/../../wp-config.php",
+                "/static/../../.env",
             ]
             for _ in range(burst):
                 records.append(
                     (
-                        make_log_line(ts, ip, "GET", rng.choice(payloads), rng.choice([400, 403, 404, 500]), rng.randint(100, 550), rng.choice(UA_TOOLS)),
+                        make_log_line(ts, ip, "GET", rng.choice(payloads), rng.choice([400, 403, 404, 500]), rng.randint(100, 550), rng.choice(ua_pool)),
                         "ANOMALY",
                     )
                 )
                 ts = _next_ts(ts, rng, 150, 2400)
                 remaining -= 1
         else:
+            # Rapid crawl — use tool UAs to differentiate from normal pagination
             burst = min(rng.randint(20, 60), remaining)
             for page in range(burst):
                 records.append(
@@ -501,8 +475,16 @@ def generate_synthetic_records(total: int, seed: int, class_profile: str) -> lis
     tz = timezone(timedelta(hours=3))
     # Use midnight as base so diurnal hour offsets map directly to wall clock.
     base_ts = datetime(2026, 1, 10, 0, 0, 0, tzinfo=tz)
-    normal_ips = [f"192.168.1.{index}" for index in range(10, 90)]
-    attacker_ips = [f"45.133.{rng.randint(1, 255)}.{rng.randint(1, 255)}" for _ in range(35)]
+    # IPs now overlap between normal and attacker ranges to prevent IP-based shortcuts
+    normal_ips = (
+        [f"192.168.1.{index}" for index in range(10, 90)]
+        + [f"45.133.{rng.randint(1, 255)}.{rng.randint(1, 255)}" for _ in range(10)]  # some "attacker" IPs in normal pool
+        + [f"10.0.{rng.randint(0, 255)}.{rng.randint(2, 254)}" for _ in range(5)]
+    )
+    attacker_ips = (
+        [f"45.133.{rng.randint(1, 255)}.{rng.randint(1, 255)}" for _ in range(25)]
+        + [f"192.168.1.{rng.randint(10, 89)}" for _ in range(10)]  # some "normal" IPs in attacker pool
+    )
     dos_ips = [f"10.0.{rng.randint(0, 255)}.{rng.randint(2, 254)}" for _ in range(180)]
     distribution = _class_distribution(total, class_profile=class_profile)
 
@@ -577,11 +559,16 @@ def generate_synthetic_records(total: int, seed: int, class_profile: str) -> lis
         camp_rng = random.Random(seed + 9000 + camp_idx)
         attacker_ip = rng.choice(attacker_ips)
         camp_start = base_ts + timedelta(hours=hour_offset, minutes=rng.randint(0, 30))
-        campaign_records = gen_mixed_attack_campaign(camp_size, camp_start, attacker_ip, camp_rng)
+        attack_plan = _allocate_mixed_attack_plan(camp_size, mixed_budget, camp_rng)
+        campaign_records = gen_mixed_attack_campaign_from_plan(attack_plan, camp_start, attacker_ip, camp_rng)
         all_records.extend(campaign_records)
         mixed_generated += len(campaign_records)
     if mixed_generated:
         print(f"  generated {mixed_generated} rows across {len(mixed_windows)} mixed campaigns")
+
+    remaining_mixed = sum(mixed_budget.values())
+    if remaining_mixed != 0:
+        raise RuntimeError(f"Mixed campaign allocation drifted by {remaining_mixed} rows.")
 
     # parse_records() will sort everything by timestamp – no shuffle needed.
     return all_records
@@ -745,6 +732,7 @@ def generate_dataset(
     print(f"Parsed rows: {len(df)}")
 
     features = extract_features(df)
+    features["event_ts"] = df["ts"].dt.strftime("%Y-%m-%dT%H:%M:%S%z")
     features["split_group"] = df["ts"].dt.floor("30min").dt.strftime("%Y-%m-%dT%H:%M:%S%z")
     features["label"] = df["label"].astype(str)
     print("Label distribution:")

@@ -42,7 +42,7 @@
   <div class="d-flex justify-content-between align-items-center mb-3">
     <div>
       <h1 class="h3 mb-1">Отчет анализа</h1>
-      <p class="text-muted mb-0">ML-анализ access-лога с regex-валидацией.</p>
+      <p class="text-muted mb-0">ML-анализ access-лога с сопоставлением против regex baseline.</p>
     </div>
     <div>
       <a class="btn btn-outline-secondary" href="/">Назад</a>
@@ -60,7 +60,7 @@
   <div class="row g-3 mb-3">
     <div class="col-md-3"><div class="card report-card p-3"><div class="text-muted">Запросов</div><div class="h4 kpi mono">{{ summary.total_requests }}</div></div></div>
     <div class="col-md-3"><div class="card report-card p-3"><div class="text-muted">Уник. IP</div><div class="h4 kpi mono">{{ summary.unique_ips }}</div></div></div>
-    <div class="col-md-3"><div class="card report-card p-3"><div class="text-muted">Инцидентов</div><div class="h4 kpi mono">{{ summary.incidents_total }}</div></div></div>
+    <div class="col-md-3"><div class="card report-card p-3"><div class="text-muted">Инцидентов</div><div class="h4 kpi mono">{{ summary.incidents_total }}</div>{% if summary.suppressed_anomalies %}<div class="text-muted small">+{{ summary.suppressed_anomalies }} отфильтровано</div>{% endif %}</div></div>
     <div class="col-md-3"><div class="card report-card p-3"><div class="text-muted">Период</div><div class="small">{{ summary.time_min }}<br>{{ summary.time_max }}</div></div></div>
   </div>
 
@@ -81,19 +81,18 @@
   </div>
 
   <div class="card report-card p-3 mb-3">
-    <h2 class="h5">Точность модели</h2>
-    {% if accuracy %}
+    <h2 class="h5">Сопоставление с regex baseline</h2>
+    <p class="text-muted small mb-3">Это не метрики точности модели по разметке, а только степень совпадения ML-инцидентов с regex baseline.</p>
+    {% if baseline %}
       <div class="row g-3 mb-3">
-        <div class="col-md-2"><div class="border rounded-3 p-3 bg-light-subtle"><div class="text-muted small">Agreement</div><div class="h5 mono mb-0">{{ "%.1f%%"|format(accuracy.agreement_rate * 100) }}</div></div></div>
-        <div class="col-md-2"><div class="border rounded-3 p-3 bg-light-subtle"><div class="text-muted small">Precision</div><div class="h5 mono mb-0">{{ "%.1f%%"|format(accuracy.precision * 100) }}</div></div></div>
-        <div class="col-md-2"><div class="border rounded-3 p-3 bg-light-subtle"><div class="text-muted small">Recall</div><div class="h5 mono mb-0">{{ "%.1f%%"|format(accuracy.recall * 100) }}</div></div></div>
-        <div class="col-md-2"><div class="border rounded-3 p-3 bg-light-subtle"><div class="text-muted small">F1</div><div class="h5 mono mb-0">{{ "%.1f%%"|format(accuracy.f1 * 100) }}</div></div></div>
-        <div class="col-md-2"><div class="border rounded-3 p-3 bg-light-subtle"><div class="text-muted small">ML</div><div class="h5 mono mb-0">{{ accuracy.total_ml }}</div></div></div>
-        <div class="col-md-2"><div class="border rounded-3 p-3 bg-light-subtle"><div class="text-muted small">Regex</div><div class="h5 mono mb-0">{{ accuracy.total_regex }}</div></div></div>
+        <div class="col-md-3"><div class="border rounded-3 p-3 bg-light-subtle"><div class="text-muted small">Agreement</div><div class="h5 mono mb-0">{{ "%.1f%%"|format(baseline.agreement_rate * 100) }}</div></div></div>
+        <div class="col-md-3"><div class="border rounded-3 p-3 bg-light-subtle"><div class="text-muted small">ML</div><div class="h5 mono mb-0">{{ baseline.total_ml }}</div></div></div>
+        <div class="col-md-3"><div class="border rounded-3 p-3 bg-light-subtle"><div class="text-muted small">Regex</div><div class="h5 mono mb-0">{{ baseline.total_regex }}</div></div></div>
+        <div class="col-md-3"><div class="border rounded-3 p-3 bg-light-subtle"><div class="text-muted small">Overlap</div><div class="h5 mono mb-0">{{ baseline.overlap }}</div></div></div>
       </div>
       <div class="row g-3">
         <div class="col-md-6">
-          <div class="small text-muted mb-2">Найдено только ML: {{ accuracy.ml_only|length }}. Найдено только regex: {{ accuracy.regex_only|length }}. Пересечение: {{ accuracy.overlap }}.</div>
+          <div class="small text-muted mb-2">Найдено только ML: {{ baseline.ml_only|length }}. Найдено только regex: {{ baseline.regex_only|length }}. Пересечение: {{ baseline.overlap }}.</div>
         </div>
       </div>
       <div class="table-responsive mt-2">
@@ -107,7 +106,7 @@
             </tr>
           </thead>
           <tbody>
-            {% for attack_type, values in accuracy.per_type_comparison.items() %}
+            {% for attack_type, values in baseline.per_type_comparison.items() %}
               <tr>
                 <td><span class="badge rounded-pill text-bg-dark badge-type">{{ attack_type }}</span></td>
                 <td class="mono">{{ values.ml }}</td>
@@ -119,7 +118,7 @@
         </table>
       </div>
     {% else %}
-      <p class="text-muted mb-0">Метрики сравнения станут доступны после загрузки обученной CatBoost-модели.</p>
+      <p class="text-muted mb-0">Сопоставление появится после загрузки обученной CatBoost-модели и запуска regex baseline.</p>
     {% endif %}
   </div>
 
@@ -153,7 +152,7 @@
     </div>
     <div class="col-md-6">
       <div class="card report-card p-3">
-        <h2 class="h6">ML vs Regex</h2>
+        <h2 class="h6">ML vs Regex Baseline</h2>
         <img class="chart-image" src="{{ chart_comparison }}" alt="ML vs Regex chart">
       </div>
     </div>

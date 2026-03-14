@@ -4,7 +4,7 @@ from datetime import datetime, timedelta, timezone
 
 import pandas as pd
 
-from parser import parse_line
+from core.parser import parse_line
 from tools.generate_dataset import generate_dataset
 from tools.generate_logs import normal_traffic
 from tools.train_model import split_dataset_frame
@@ -37,10 +37,16 @@ class SyntheticGenerationTests(unittest.TestCase):
         dataset = generate_dataset(total=6000, seed=7, class_profile="realistic")
 
         self.assertIn("split_group", dataset.columns)
+        self.assertIn("event_ts", dataset.columns)
 
         counts = dataset["label"].value_counts()
-        self.assertGreater(counts["NORMAL"], counts["DOS"])
-        self.assertGreater(counts["NORMAL"], counts["SQLI"])
+        self.assertEqual(int(counts["NORMAL"]), 4800)
+        # Some attack payloads may fail to parse (special chars), so allow small tolerance
+        self.assertAlmostEqual(int(counts["SQLI"]), 180, delta=15)
+        self.assertAlmostEqual(int(counts["XSS"]), 180, delta=15)
+        self.assertEqual(int(counts["BRUTE_FORCE"]), 300)
+        self.assertEqual(int(counts["DOS"]), 240)
+        self.assertEqual(int(counts["ANOMALY"]), 300)
 
         normal = dataset[dataset["label"] == "NORMAL"]
         self.assertGreater(int((normal["has_common_attack_path"] == 1).sum()), 0)
@@ -73,6 +79,35 @@ class SyntheticGenerationTests(unittest.TestCase):
         test_groups = set(df.loc[test_idx, "split_group"])
         self.assertEqual(split_mode, "group")
         self.assertTrue(train_groups.isdisjoint(test_groups))
+        self.assertEqual(set(df.loc[train_idx, "label"]), set(labels))
+        self.assertEqual(set(df.loc[test_idx, "label"]), set(labels))
+
+    def test_auto_split_prefers_temporal_holdout(self):
+        labels = ["NORMAL", "SQLI", "XSS", "BRUTE_FORCE", "DOS", "ANOMALY"]
+        rows = []
+        for group_idx in range(4):
+            group = f"2026-01-10T{group_idx:02d}:00:00+0300"
+            for label in labels:
+                rows.append(
+                    {
+                        "label": label,
+                        "split_group": group,
+                        "feature_stub": group_idx,
+                    }
+                )
+
+        df = pd.DataFrame(rows)
+        train_idx, test_idx, split_mode = split_dataset_frame(
+            df=df,
+            test_size=0.5,
+            random_seed=42,
+            split_mode="auto",
+        )
+
+        train_groups = sorted(set(df.loc[train_idx, "split_group"]))
+        test_groups = sorted(set(df.loc[test_idx, "split_group"]))
+        self.assertEqual(split_mode, "time")
+        self.assertLess(max(train_groups), min(test_groups))
         self.assertEqual(set(df.loc[train_idx, "label"]), set(labels))
         self.assertEqual(set(df.loc[test_idx, "label"]), set(labels))
 

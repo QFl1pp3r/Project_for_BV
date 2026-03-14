@@ -9,7 +9,15 @@ Flask-приложение для анализа HTTP access-логов Nginx/Ap
 - `DOS`
 - `ANOMALY`
 
-Regex-детекторы сохранены как baseline для валидации точности модели.
+Regex-детекторы сохранены как baseline для side-by-side сравнения с ML. Важно: это не ground truth и не замена полноценной ML-валидации на размеченном датасете.
+
+## Статус проекта
+
+Текущая реализация — `PoC / demo`, а не production-ready SOC/IR инструмент.
+
+- Онлайн-отчет показывает только степень совпадения `ML vs Regex baseline`.
+- Настоящие ML-метрики качества нужно считать офлайн на отдельном размеченном validation-наборе.
+- Если внешний validation-набор не предоставлен, все метрики обучения относятся только к внутреннему holdout-сплиту и не доказывают готовность модели к реальному трафику.
 
 ## Быстрый старт
 
@@ -31,6 +39,16 @@ python3 tools/generate_dataset.py --output data/dataset.csv --total 120000
 
 ```bash
 python3 tools/train_model.py --dataset data/dataset.csv --output models/attack_detector.cbm --metrics models/metrics.json
+```
+
+3. При наличии отдельного размеченного validation-набора выполнить внешнюю офлайн-валидацию:
+
+```bash
+python3 tools/train_model.py \
+  --dataset data/dataset.csv \
+  --validation-dataset data/validation_dataset.csv \
+  --output models/attack_detector.cbm \
+  --metrics models/metrics.json
 ```
 
 После этого Flask-приложение будет использовать `models/attack_detector.cbm` как основной детектор.
@@ -70,8 +88,10 @@ python3 tools/generate_logs.py --mode dos > test_logs/demo_dos.log
 - график нагрузки по минутам
 - топ IP
 - распределение confidence модели
-- сравнение `ML vs Regex`
+- сравнение `ML vs Regex baseline`
 - таблица инцидентов с confidence и признаком совпадения с regex
+
+Важно: блок `ML vs Regex baseline` в веб-интерфейсе не является оценкой точности модели по разметке.
 
 ## Структура
 

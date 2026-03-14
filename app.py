@@ -6,11 +6,19 @@ import pandas as pd
 from flask import Flask, flash, redirect, render_template, request, send_file, url_for
 from werkzeug.utils import secure_filename
 
-from accuracy import annotate_ml_matches, evaluate_accuracy
-from detectors import run_regex_all
-from ml_detector import MLDetector
-from parser import parse_file
-from report import (
+from core.analysis import build_requests_df, run_analysis
+from config import (
+    ALLOWED_EXT,
+    GEN_DIR,
+    INCIDENT_COLUMNS,
+    MAX_FILE_SIZE,
+    MIN_ATTACK_CONFIDENCE,
+    TIME_FORMAT,
+    UPLOAD_DIR,
+)
+from core.ml_detector import MLDetector
+from core.parser import parse_file
+from core.report import (
     ensure_dir,
     incidents_to_csv,
     plot_attacks_over_time,
@@ -19,29 +27,6 @@ from report import (
     plot_requests_over_time,
     plot_top_ips,
 )
-
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-UPLOAD_DIR = os.path.join(BASE_DIR, "uploads")
-GEN_DIR = os.path.join(BASE_DIR, "static", "generated")
-
-ALLOWED_EXT = {".log", ".txt"}
-MAX_FILE_SIZE = 15 * 1024 * 1024
-APP_TZ = "Europe/Moscow"
-TIME_FORMAT = "%Y-%m-%d %H:%M:%S %z"
-INCIDENT_COLUMNS = [
-    "type",
-    "severity",
-    "ip",
-    "start",
-    "end",
-    "confidence",
-    "regex_match",
-    "request_count",
-    "evidence",
-    "tactic",
-    "technique",
-    "technique_id",
-]
 
 app = Flask(__name__)
 app.secret_key = "dev-secret-change-me"
@@ -56,7 +41,7 @@ def allowed(filename: str) -> bool:
     return ext in ALLOWED_EXT
 
 
-def format_ts(value) -> str:
+def format_ts(value: object) -> str:
     if value is None:
         return ""
     try:
@@ -71,13 +56,6 @@ def validate_upload(file_obj) -> tuple[bool, str]:
     if not allowed(file_obj.filename):
         return False, "Поддерживаются только файлы .log или .txt."
     return True, ""
-
-
-def build_requests_df(rows: list[dict]) -> pd.DataFrame:
-    df = pd.DataFrame(rows)
-    ts = pd.to_datetime(df["ts"], errors="coerce", utc=True)
-    df = df.assign(ts=ts.dt.tz_convert(APP_TZ))
-    return df.dropna(subset=["ts"]).sort_values("ts").reset_index(drop=True)
 
 
 def build_incidents_df(incidents: list[dict]) -> pd.DataFrame:
@@ -102,13 +80,14 @@ def build_incidents_view(incidents: list[dict]) -> list[dict]:
     return view
 
 
-def build_summary(df: pd.DataFrame, incidents_df: pd.DataFrame) -> dict:
+def build_summary(df: pd.DataFrame, incidents_df: pd.DataFrame, suppressed_anomalies: int = 0) -> dict:
     return {
         "total_requests": int(len(df)),
         "unique_ips": int(df["ip"].nunique()),
         "time_min": format_ts(df["ts"].min()),
         "time_max": format_ts(df["ts"].max()),
         "incidents_total": int(len(incidents_df)),
+        "suppressed_anomalies": suppressed_anomalies,
     }
 
 
@@ -151,37 +130,20 @@ def analyze():
         flash("Лог распознан, но не удалось обработать временные метки.")
         return redirect(url_for("index"))
 
-    regex_incidents = run_regex_all(df)
-    accuracy_metrics = None
-    model_error = None
-    analysis_mode = "ml"
-
-    try:
-        ml_incidents = ml_detector.predict(df)
-        incidents = annotate_ml_matches(ml_incidents, regex_incidents)
-        accuracy_metrics = evaluate_accuracy(df, ml_incidents, regex_incidents)
-    except Exception as exc:
-        model_error = str(exc)
-        analysis_mode = "regex_fallback"
-        incidents = []
-        for incident in regex_incidents:
-            item = dict(incident)
-            item["confidence"] = None
-            item["regex_match"] = True
-            item["request_count"] = item.get("request_count") or 1
-            incidents.append(item)
+    incidents, baseline_comparison, analysis_mode, model_error = run_analysis(df, ml_detector)
 
     incidents_df = build_incidents_df(incidents)
-    summary = build_summary(df, incidents_df)
+    suppressed = sum(inc.get("suppressed_anomalies", 0) for inc in incidents)
+    summary = build_summary(df, incidents_df, suppressed_anomalies=suppressed)
     counts = incidents_df["type"].value_counts().to_dict() if not incidents_df.empty else {}
 
     tag = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
     paths = artifact_paths(tag)
     plot_requests_over_time(df, paths["rps"])
     plot_top_ips(df, paths["topip"])
-    plot_attacks_over_time(incidents_df, paths["attacks"], include_anomalies=True)
+    plot_attacks_over_time(incidents_df, paths["attacks"], include_anomalies=True, min_confidence=MIN_ATTACK_CONFIDENCE)
     plot_confidence_distribution(incidents_df, paths["confidence"])
-    plot_ml_vs_regex_comparison(accuracy_metrics, paths["comparison"])
+    plot_ml_vs_regex_comparison(baseline_comparison, paths["comparison"])
     incidents_to_csv(incidents, paths["csv"])
 
     return render_template(
@@ -189,7 +151,7 @@ def analyze():
         summary=summary,
         counts=counts,
         incidents=build_incidents_view(incidents),
-        accuracy=accuracy_metrics,
+        baseline=baseline_comparison,
         analysis_mode=analysis_mode,
         model_error=model_error,
         chart_rps=url_for("static", filename=f"generated/rps_{tag}.png"),
@@ -202,7 +164,7 @@ def analyze():
 
 
 @app.get("/download/<fname>")
-def download_csv(fname):
+def download_csv(fname: str):
     path = os.path.join(GEN_DIR, secure_filename(fname))
     if not os.path.exists(path):
         flash("Файл отчета не найден")

@@ -2,7 +2,7 @@ import unittest
 
 import pandas as pd
 
-from feature_engineering import FEATURE_COLUMNS, align_feature_columns, extract_features
+from core.feature_engineering import FEATURE_COLUMNS, align_feature_columns, extract_features
 
 
 class FeatureEngineeringTests(unittest.TestCase):

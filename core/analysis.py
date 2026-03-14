@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Optional
 
 import pandas as pd
 
-from .accuracy import annotate_ml_matches, compare_with_regex_baseline
+from .accuracy import compare_with_regex_baseline, merge_incident_sources
 from config import APP_TZ
 from .detectors import run_regex_all
 
@@ -38,17 +38,11 @@ def run_analysis(
 
     try:
         ml_incidents = ml_detector.predict(df)
-        incidents = annotate_ml_matches(ml_incidents, regex_incidents)
+        incidents = merge_incident_sources(ml_incidents, regex_incidents)
         baseline_comparison = compare_with_regex_baseline(None, ml_incidents, regex_incidents)
         return incidents, baseline_comparison, analysis_mode, model_error
     except Exception as exc:
         model_error = str(exc)
         analysis_mode = "regex_fallback"
-        incidents = []
-        for incident in regex_incidents:
-            item = dict(incident)
-            item["confidence"] = None
-            item["regex_match"] = True
-            item["request_count"] = item.get("request_count") or 1
-            incidents.append(item)
+        incidents = merge_incident_sources([], regex_incidents)
         return incidents, baseline_comparison, analysis_mode, model_error

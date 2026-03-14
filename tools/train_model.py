@@ -23,6 +23,25 @@ from core.feature_engineering import FEATURE_COLUMNS, align_feature_columns
 LABEL_ORDER = list(ATTACK_LABELS)
 
 
+def _validate_label_schema(labels: pd.Series, dataset_role: str) -> list[str]:
+    observed = {str(label) for label in labels.astype(str).unique()}
+    unsupported_labels = sorted(observed - set(ATTACK_LABELS))
+    if unsupported_labels:
+        raise ValueError(
+            f"{dataset_role} contains unsupported labels for the current class schema: "
+            f"{unsupported_labels}. Regenerate the dataset before training."
+        )
+
+    missing_labels = [label for label in ATTACK_LABELS if label not in observed]
+    if missing_labels:
+        raise ValueError(
+            f"{dataset_role} is missing required labels for the current 5-class schema: "
+            f"{missing_labels}. Regenerate the dataset before training."
+        )
+
+    return [label for label in LABEL_ORDER if label in observed]
+
+
 def _class_weights(y_train: pd.Series, class_names: list[str]) -> list[float]:
     counts = y_train.value_counts()
     max_count = counts.max()
@@ -113,6 +132,12 @@ def _evaluate_labeled_frame(
         raise ValueError("Validation dataset must contain a 'label' column.")
 
     y_true = df["label"].astype(str)
+    unsupported_labels = sorted(set(y_true.unique()) - set(class_names))
+    if unsupported_labels:
+        raise ValueError(
+            f"{dataset_role} contains unsupported labels for the current model schema: "
+            f"{unsupported_labels}."
+        )
     X = align_feature_columns(df.drop(columns=["label"], errors="ignore"))
     predictions = model.predict(X)
     y_pred = pd.Series(predictions.reshape(-1)).astype(str)
@@ -189,7 +214,7 @@ def train_model(
         raise ValueError("Dataset must contain a 'label' column.")
 
     y = df["label"].astype(str)
-    class_names = [label for label in LABEL_ORDER if label in set(y.unique())]
+    class_names = _validate_label_schema(y, "Dataset")
     if not class_names:
         raise ValueError("No supported labels found in dataset.")
 

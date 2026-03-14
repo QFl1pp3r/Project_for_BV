@@ -1,9 +1,19 @@
+"""
+Constant pools consumed by the log and dataset generators.
+
+This module centralises User-Agent strings, URL path pools, and attack
+payloads so that both ``generate_logs.py`` and ``generate_dataset.py``
+draw from a single, consistent source of truth.
+"""
+
+from core.mitre import LOGIN_PATHS
 
 # ---------------------------------------------------------------------------
 # User-Agent pools
 # ---------------------------------------------------------------------------
 
-UA_NORMAL = [
+# Mainstream desktop and mobile browsers.
+UA_NORMAL: list[str] = [
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36",
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36",
     "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0 Safari/537.36",
@@ -14,7 +24,8 @@ UA_NORMAL = [
     "Mozilla/5.0 (Android 14; Mobile; rv:124.0) Gecko/124.0 Firefox/124.0",
 ]
 
-UA_TOOLS = [
+# Offensive security tools and automation clients.
+UA_TOOLS: list[str] = [
     "sqlmap/1.7.11#stable (https://sqlmap.org)",
     "sqlmap/1.6.12 (Python 3.11)",
     "XSS-Scanner/2.0",
@@ -28,7 +39,8 @@ UA_TOOLS = [
     "nmap/7.94",
 ]
 
-UA_BOTS = [
+# Legitimate search-engine and SEO crawlers.
+UA_BOTS: list[str] = [
     "Googlebot/2.1 (+http://www.google.com/bot.html)",
     "AhrefsBot/7.0 (+http://ahrefs.com/robot/)",
     "bingbot/2.0 (+http://www.bing.com/bingbot.htm)",
@@ -38,13 +50,11 @@ UA_BOTS = [
 ]
 
 
-
 # ---------------------------------------------------------------------------
-# URL pools
+# URL path pools — normal (benign) traffic
 # ---------------------------------------------------------------------------
 
-
-PUBLIC_PAGE_PATHS = [
+PUBLIC_PAGE_PATHS: list[str] = [
     "/",
     "/index.html",
     "/about",
@@ -58,7 +68,7 @@ PUBLIC_PAGE_PATHS = [
     "/settings",
 ]
 
-CATALOG_PATHS = [
+CATALOG_PATHS: list[str] = [
     "/products",
     "/products?category=electronics",
     "/products?category=books",
@@ -68,7 +78,8 @@ CATALOG_PATHS = [
     "/cart",
     "/checkout",
 ]
-API_READ_PATHS = [
+
+API_READ_PATHS: list[str] = [
     "/api/items",
     "/api/items?page=1",
     "/api/items?page=2&limit=20",
@@ -77,7 +88,7 @@ API_READ_PATHS = [
     "/api/search",
 ]
 
-STATIC_PATHS = [
+STATIC_PATHS: list[str] = [
     "/static/app.js",
     "/static/site.css",
     "/images/logo.png",
@@ -86,11 +97,19 @@ STATIC_PATHS = [
     "/sitemap.xml",
 ]
 
-AUTH_FLOW_PATHS = [
-    "/login", "/signin", "/auth/login", "/account/login", "/user/login",
+# Login and authentication flow endpoints.
+AUTH_FLOW_PATHS: list[str] = [
+    "/login",
+    "/signin",
+    "/auth/login",
+    "/account/login",
+    "/user/login",
 ]
 
-BENIGN_EDGE_PATHS = [
+# Legitimate paths that superficially resemble attack patterns (hard negatives
+# for training).  Includes admin panels visited by real users, search queries
+# containing SQL-like words, and monitoring/healthcheck endpoints.
+BENIGN_EDGE_PATHS: list[str] = [
     "/admin",
     "/admin/login",
     "/admin/dashboard",
@@ -114,40 +133,25 @@ BENIGN_EDGE_PATHS = [
     "/api/debug/version",
     "/backup/status",
     "/.well-known/security.txt",
-    "/robots.txt",
+    "/robots.txt",  # NOTE: also in STATIC_PATHS; duplicate kept to weight NORMAL_PATHS sampling
     "/swagger-ui/index.html",
 ]
-NORMAL_PATHS = PUBLIC_PAGE_PATHS + CATALOG_PATHS + API_READ_PATHS + STATIC_PATHS + AUTH_FLOW_PATHS + BENIGN_EDGE_PATHS
 
-from core.mitre import LOGIN_PATHS
+# Union of all benign path pools — used by generators for ``rng.choice()``.
+NORMAL_PATHS: list[str] = (
+    PUBLIC_PAGE_PATHS + CATALOG_PATHS + API_READ_PATHS
+    + STATIC_PATHS + AUTH_FLOW_PATHS + BENIGN_EDGE_PATHS
+)
 
-DOS_PATHS = ["/api/items", "/api/items?page=1", "/api/search", "/"]
+# Endpoints targeted during DoS/DDoS floods.
+DOS_PATHS: list[str] = ["/api/items", "/api/items?page=1", "/api/search", "/"]
 
 
-SCAN_WORDLIST = [
-    # Sensitive files
-    "/.env", "/.env.local", "/.env.production", "/.env.backup",
-    "/.git/config", "/.git/HEAD", "/.htaccess", "/.htpasswd",
-    "/wp-config.php", "/wp-config.php.bak", "/config.php",
-    "/database.yml", "/db.sql", "/backup.zip", "/backup.tar.gz",
-    # Admin panels
-    "/wp-admin", "/wp-admin/admin-ajax.php",
-    "/phpmyadmin", "/phpmyadmin/index.php",
-    "/adminer.php", "/admin.php", "/admin/config",
-    "/panel", "/cpanel", "/webmail",
-    # Sensitive endpoints
-    "/server-status", "/server-info", "/nginx_status",
-    "/actuator", "/actuator/health", "/actuator/env",
-    "/actuator/dump", "/actuator/mappings",
-    "/api/debug", "/api/v1/admin", "/console",
-    "/swagger.json", "/swagger-ui.html", "/openapi.json",
-    "/graphql", "/graphiql",
-    # Common CMS/framework paths
-    "/proc/self/environ", "/etc/passwd",
-    "/../../../etc/passwd", "/../../../../etc/shadow",
-]
+# ---------------------------------------------------------------------------
+# Attack payloads — SQL Injection
+# ---------------------------------------------------------------------------
 
-SQLI_PAYLOADS = [
+SQLI_PAYLOADS: list[str] = [
     # Classic / error-based
     "/products?id=1 OR 1=1",
     "/products?id=1' OR '1'='1",
@@ -183,7 +187,11 @@ SQLI_PAYLOADS = [
     "/api/items?sort=1' UNION SELECT 1,2,LOAD_FILE('/etc/passwd')--",
 ]
 
-XSS_PAYLOADS = [
+# ---------------------------------------------------------------------------
+# Attack payloads — Cross-Site Scripting (XSS)
+# ---------------------------------------------------------------------------
+
+XSS_PAYLOADS: list[str] = [
     # Script injection (raw and URL-encoded)
     "/search?q=<script>alert(1)</script>",
     "/search?q=%3Cscript%3Ealert(1)%3C%2Fscript%3E",
@@ -216,82 +224,4 @@ XSS_PAYLOADS = [
     "/comments?msg=<a href=javascript:alert(1)>click</a>",
     # CSS injection
     "/profile?style=<style>@import%20'javascript:alert(1)'</style>",
-]
-
-LFI_PAYLOADS = [
-    # Classic traversal
-    "/download?file=../../../../etc/passwd",
-    "/page?include=../../../etc/shadow",
-    "/api/file?name=../../etc/passwd",
-    "/static?path=../../../../proc/self/environ",
-    "/view?doc=../../../windows/win.ini",
-    # URL-encoded traversal
-    "/download?file=%2e%2e%2f%2e%2e%2f%2e%2e%2fetc%2fpasswd",
-    "/page?include=..%2F..%2F..%2Fetc%2Fshadow",
-    "/api/read?path=%2e%2e%2f%2e%2e%2fetc%2fhosts",
-    # Double-encoded
-    "/page?file=..%252F..%252F..%252Fetc%252Fpasswd",
-    "/download?path=..%252fetc%252fpasswd",
-    # Null byte (legacy)
-    "/page?include=../../../../etc/passwd%00",
-    "/download?file=../../../../etc/passwd%00.jpg",
-    # Absolute path
-    "/api/file?path=/etc/passwd",
-    "/api/log?name=/var/log/apache2/access.log",
-    "/page?include=/proc/self/environ",
-    # Windows paths
-    "/download?file=..\\..\\..\\windows\\system32\\drivers\\etc\\hosts",
-    "/page?name=C:\\boot.ini",
-    # PHP wrappers (RFI/LFI)
-    "/page?include=php://filter/convert.base64-encode/resource=index.php",
-    "/api/read?file=php://input",
-    "/page?inc=data://text/plain;base64,PD9waHAgc3lzdGVtKCdpZCcpOz8+",
-    # Log poisoning targets
-    "/api/file?name=/var/log/nginx/access.log",
-    "/page?include=/var/log/auth.log",
-]
-
-
-SCAN_PATHS = [
-    "/.env",
-    "/.env.production",
-    "/.env.backup",
-    "/wp-admin",
-    "/wp-admin/install.php",
-    "/wp-includes/wlwmanifest.xml",
-    "/phpmyadmin",
-    "/phpmyadmin/index.php",
-    "/backup.zip",
-    "/backup.sql.gz",
-    "/config",
-    "/config.yml",
-    "/server-status",
-    "/.git/config",
-    "/.git/HEAD",
-    "/.gitignore",
-    "/db.sql",
-    "/dump.sql",
-    "/admin.php",
-    "/.htaccess",
-    "/.htpasswd",
-    "/wp-config.php",
-    "/wp-config.php.bak",
-    "/etc/passwd",
-    "/../../../etc/shadow",
-    "/proc/self/environ",
-    "/api/debug",
-    "/console",
-    "/actuator/health",
-    "/actuator/env",
-    "/swagger.json",
-    "/api-docs",
-    "/.DS_Store",
-    "/crossdomain.xml",
-    "/elmah.axd",
-    "/trace.axd",
-    "/web.config",
-    "/sftp-config.json",
-    "/.svn/entries",
-    "/cgi-bin/test-cgi",
-    "/solr/admin",
 ]

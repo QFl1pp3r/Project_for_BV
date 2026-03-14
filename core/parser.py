@@ -6,7 +6,7 @@ from typing import Any, Dict, Optional
 # 127.0.0.1 - - [10/Oct/2000:13:55:36 +0300] "GET /index.html?x=1 HTTP/1.1" 200 2326 "-" "UA"
 LOG_RE = re.compile(
     r'^(?P<ip>\S+) \S+ \S+ \[(?P<time>[^\]]+)\] '
-    r'"(?P<method>[A-Z]+) (?P<url>\S+) (?P<proto>[^"]+)" '
+    r'"(?P<method>[A-Z]+) (?P<url>.+?) (?P<proto>HTTP/[0-9.]+)" '
     r'(?P<status>\d{3}) (?P<bytes>\S+) '
     r'"(?P<ref>[^"]*)" "(?P<ua>[^"]*)"'
 )
@@ -14,7 +14,7 @@ LOG_RE = re.compile(
 # Более простой common без ref/ua
 LOG_RE_COMMON = re.compile(
     r'^(?P<ip>\S+) \S+ \S+ \[(?P<time>[^\]]+)\] '
-    r'"(?P<method>[A-Z]+) (?P<url>\S+) (?P<proto>[^"]+)" '
+    r'"(?P<method>[A-Z]+) (?P<url>.+?) (?P<proto>HTTP/[0-9.]+)" '
     r'(?P<status>\d{3}) (?P<bytes>\S+)'
 )
 

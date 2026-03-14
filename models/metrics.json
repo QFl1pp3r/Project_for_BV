@@ -1,105 +1,97 @@
 {
-  "trained_at": "2026-03-14T17:55:50.504280+00:00",
+  "trained_at": "2026-03-14T22:23:40.058332+00:00",
   "dataset_path": "data/dataset.csv",
-  "train_size": 159219,
-  "test_size": 40615,
-  "iterations": 1000,
-  "depth": 8,
+  "train_size": 95775,
+  "test_size": 24225,
+  "iterations": 300,
+  "depth": 6,
   "learning_rate": 0.05,
   "split_mode": "time",
   "split_mode_requested": "auto",
   "validation_dataset_path": null,
-  "accuracy": 0.999089006524683,
+  "accuracy": 0.998390092879257,
   "macro_avg": {
-    "precision": 0.9971873126758636,
-    "recall": 0.9991910841688214,
-    "f1-score": 0.9981851327639233,
-    "support": 40615.0
+    "precision": 0.9894279683286149,
+    "recall": 0.9996154604614474,
+    "f1-score": 0.9944482133289633,
+    "support": 24225.0
   },
   "weighted_avg": {
-    "precision": 0.9990922390249131,
-    "recall": 0.999089006524683,
-    "f1-score": 0.9990897439342529,
-    "support": 40615.0
+    "precision": 0.9984315957057504,
+    "recall": 0.998390092879257,
+    "f1-score": 0.9983998621103944,
+    "support": 24225.0
   },
   "per_class": {
     "NORMAL": {
-      "precision": 0.999716642528808,
-      "recall": 0.9991189704540449,
-      "f1-score": 0.9994177171364274,
-      "support": 31781.0
+      "precision": 1.0,
+      "recall": 0.9980773023072372,
+      "f1-score": 0.9990377260726887,
+      "support": 20284.0
     },
     "SQLI": {
-      "precision": 0.9984928409947249,
+      "precision": 0.9971711456859972,
       "recall": 1.0,
-      "f1-score": 0.9992458521870287,
-      "support": 1325.0
+      "f1-score": 0.9985835694050992,
+      "support": 705.0
     },
     "XSS": {
-      "precision": 1.0,
+      "precision": 0.9646539027982327,
       "recall": 1.0,
-      "f1-score": 1.0,
-      "support": 987.0
+      "f1-score": 0.9820089955022488,
+      "support": 655.0
     },
     "BRUTE_FORCE": {
-      "precision": 0.9986635482793184,
-      "recall": 0.9996655518394649,
-      "f1-score": 0.9991642988467324,
-      "support": 2990.0
+      "precision": 0.9988782950084127,
+      "recall": 1.0,
+      "f1-score": 0.999438832772166,
+      "support": 1781.0
     },
     "DOS": {
-      "precision": 0.9903417533432393,
+      "precision": 0.9864364981504316,
       "recall": 1.0,
-      "f1-score": 0.9951474430757745,
-      "support": 1333.0
-    },
-    "ANOMALY": {
-      "precision": 0.9959090909090909,
-      "recall": 0.9963619827194179,
-      "f1-score": 0.9961354853375767,
-      "support": 2199.0
+      "f1-score": 0.9931719428926132,
+      "support": 800.0
     }
   },
   "feature_importance": {
-    "global_rps_1m": 12.469417883324072,
-    "special_char_ratio": 10.05119945077545,
-    "ip_req_count_5m": 9.55258363695449,
-    "has_special_chars": 8.938648434312663,
-    "response_bytes": 8.302562017580994,
-    "is_post": 6.057163478140248,
-    "entropy": 5.4692658153224505,
-    "ip_error_rate_5m": 5.326834178841992,
-    "method_encoded": 4.94450429669319,
-    "path_depth": 4.902438393897198,
-    "query_length": 4.639571962051005,
-    "ip_unique_paths_5m": 2.93028451192433,
-    "hour_of_day": 2.6513829148398056,
-    "url_length": 2.0768386392555094,
-    "status_group": 2.060849120590796,
-    "has_script_tags": 1.9438639679008498,
-    "status_code": 1.9158052104513774,
-    "sql_keyword_count": 1.8146742946880088,
-    "ip_login_fail_count_5m": 1.1085905846460982,
-    "is_login_path": 0.6809791401901105,
-    "num_params": 0.5712724834402314,
-    "has_sql_keywords": 0.5463430433931322,
-    "encoded_char_count": 0.43313153174175517,
-    "has_encoded_chars": 0.4275037112347455,
-    "has_common_attack_path": 0.18429129780951062
+    "has_script_tags": 22.855136877657447,
+    "global_rps_1m": 17.959252681953654,
+    "response_bytes": 12.247545063879128,
+    "query_length": 5.519638706731864,
+    "ip_error_rate_5m": 5.212208916481507,
+    "ip_login_fail_count_5m": 4.290154737777938,
+    "url_length": 4.14993720664602,
+    "hour_of_day": 3.253727957793839,
+    "has_special_chars": 3.126335916724525,
+    "ip_req_count_5m": 3.1014452726365014,
+    "is_login_path": 2.5729303784172175,
+    "is_post": 2.303744156697232,
+    "method_encoded": 2.0353112388689043,
+    "num_params": 1.918541453416013,
+    "entropy": 1.8968538767533396,
+    "ip_unique_paths_5m": 1.8733765340490742,
+    "special_char_ratio": 1.3674734768175678,
+    "status_group": 1.2539163538890818,
+    "path_depth": 1.1321472636049552,
+    "status_code": 1.0640703961553057,
+    "has_sql_keywords": 0.5505774503663604,
+    "sql_keyword_count": 0.25383184111776164,
+    "has_common_attack_path": 0.04107382565672278,
+    "has_encoded_chars": 0.012986417617723584,
+    "encoded_char_count": 0.007781998290329388
   },
   "confusion_matrix": [
     [
-      31753,
+      20245,
       2,
-      0,
-      4,
-      13,
-      9
+      24,
+      2,
+      11
     ],
     [
       0,
-      1325,
-      0,
+      705,
       0,
       0,
       0
@@ -107,16 +99,7 @@
     [
       0,
       0,
-      987,
-      0,
-      0,
-      0
-    ],
-    [
-      1,
-      0,
-      0,
-      2989,
+      655,
       0,
       0
     ],
@@ -124,17 +107,15 @@
       0,
       0,
       0,
-      0,
-      1333,
+      1781,
       0
     ],
     [
-      8,
       0,
       0,
       0,
       0,
-      2191
+      800
     ]
   ],
   "classes": [
@@ -142,75 +123,66 @@
     "SQLI",
     "XSS",
     "BRUTE_FORCE",
-    "DOS",
-    "ANOMALY"
+    "DOS"
   ],
   "primary_validation_scope": "internal_holdout_only",
   "internal_validation": {
-    "accuracy": 0.999089006524683,
+    "accuracy": 0.998390092879257,
     "macro_avg": {
-      "precision": 0.9971873126758636,
-      "recall": 0.9991910841688214,
-      "f1-score": 0.9981851327639233,
-      "support": 40615.0
+      "precision": 0.9894279683286149,
+      "recall": 0.9996154604614474,
+      "f1-score": 0.9944482133289633,
+      "support": 24225.0
     },
     "weighted_avg": {
-      "precision": 0.9990922390249131,
-      "recall": 0.999089006524683,
-      "f1-score": 0.9990897439342529,
-      "support": 40615.0
+      "precision": 0.9984315957057504,
+      "recall": 0.998390092879257,
+      "f1-score": 0.9983998621103944,
+      "support": 24225.0
     },
     "per_class": {
       "NORMAL": {
-        "precision": 0.999716642528808,
-        "recall": 0.9991189704540449,
-        "f1-score": 0.9994177171364274,
-        "support": 31781.0
+        "precision": 1.0,
+        "recall": 0.9980773023072372,
+        "f1-score": 0.9990377260726887,
+        "support": 20284.0
       },
       "SQLI": {
-        "precision": 0.9984928409947249,
+        "precision": 0.9971711456859972,
         "recall": 1.0,
-        "f1-score": 0.9992458521870287,
-        "support": 1325.0
+        "f1-score": 0.9985835694050992,
+        "support": 705.0
       },
       "XSS": {
-        "precision": 1.0,
+        "precision": 0.9646539027982327,
         "recall": 1.0,
-        "f1-score": 1.0,
-        "support": 987.0
+        "f1-score": 0.9820089955022488,
+        "support": 655.0
       },
       "BRUTE_FORCE": {
-        "precision": 0.9986635482793184,
-        "recall": 0.9996655518394649,
-        "f1-score": 0.9991642988467324,
-        "support": 2990.0
+        "precision": 0.9988782950084127,
+        "recall": 1.0,
+        "f1-score": 0.999438832772166,
+        "support": 1781.0
       },
       "DOS": {
-        "precision": 0.9903417533432393,
+        "precision": 0.9864364981504316,
         "recall": 1.0,
-        "f1-score": 0.9951474430757745,
-        "support": 1333.0
-      },
-      "ANOMALY": {
-        "precision": 0.9959090909090909,
-        "recall": 0.9963619827194179,
-        "f1-score": 0.9961354853375767,
-        "support": 2199.0
+        "f1-score": 0.9931719428926132,
+        "support": 800.0
       }
     },
     "confusion_matrix": [
       [
-        31753,
+        20245,
         2,
-        0,
-        4,
-        13,
-        9
+        24,
+        2,
+        11
       ],
       [
         0,
-        1325,
-        0,
+        705,
         0,
         0,
         0
@@ -218,16 +190,7 @@
       [
         0,
         0,
-        987,
-        0,
-        0,
-        0
-      ],
-      [
-        1,
-        0,
-        0,
-        2989,
+        655,
         0,
         0
       ],
@@ -235,28 +198,25 @@
         0,
         0,
         0,
-        0,
-        1333,
+        1781,
         0
       ],
       [
-        8,
         0,
         0,
         0,
         0,
-        2191
+        800
       ]
     ],
     "dataset_role": "internal_holdout",
-    "rows": 40615,
+    "rows": 24225,
     "label_distribution": {
-      "ANOMALY": 2199,
-      "BRUTE_FORCE": 2990,
-      "DOS": 1333,
-      "NORMAL": 31781,
-      "SQLI": 1325,
-      "XSS": 987
+      "BRUTE_FORCE": 1781,
+      "DOS": 800,
+      "NORMAL": 20284,
+      "SQLI": 705,
+      "XSS": 655
     }
   },
   "external_validation": {

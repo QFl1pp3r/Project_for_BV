@@ -9,7 +9,7 @@ UPLOAD_DIR = os.path.join(BASE_DIR, "uploads")
 GEN_DIR = os.path.join(BASE_DIR, "static", "generated")
 
 # Attack model labels (order must match trained CatBoost model)
-ATTACK_LABELS = ("NORMAL", "SQLI", "XSS", "BRUTE_FORCE", "DOS", "ANOMALY")
+ATTACK_LABELS = ("NORMAL", "SQLI", "XSS", "BRUTE_FORCE", "DOS")
 
 # App
 ALLOWED_EXT = {".log", ".txt"}
@@ -19,11 +19,11 @@ TIME_FORMAT = "%Y-%m-%d %H:%M:%S %z"
 INCIDENT_COLUMNS = [
     "type",
     "severity",
+    "source",
     "ip",
     "start",
     "end",
     "confidence",
-    "regex_match",
     "request_count",
     "evidence",
     "tactic",
@@ -39,14 +39,12 @@ ATTACK_COLORS = {
     "XSS": "#E36414",
     "BRUTE_FORCE": "#F4A259",
     "DOS": "#5A189A",
-    "ANOMALY": "#6C757D",
 }
 
 # ML model
 DEFAULT_MODEL_PATH = os.path.join(BASE_DIR, "models", "attack_detector.cbm")
+DEFAULT_METRICS_PATH = os.path.join(BASE_DIR, "models", "metrics.json")
 MIN_ATTACK_CONFIDENCE = 0.65
-MIN_ANOMALY_CONFIDENCE = 0.85
-MIN_ANOMALY_REQUEST_COUNT = 3
 
 # Shared label for multi-source/unknown-IP incidents (e.g. DOS)
 MULTI_ATTACK_LABEL = "MULTIPLE/UNKNOWN"

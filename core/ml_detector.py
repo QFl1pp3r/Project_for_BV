@@ -3,21 +3,21 @@ CatBoost-based inference for HTTP access-log attack detection.
 """
 import os
 from typing import Optional
+from urllib.parse import unquote
 
 import numpy as np
 import pandas as pd
 from catboost import CatBoostClassifier
 
 from config import (
+    ATTACK_LABELS,
     DEFAULT_MODEL_PATH,
-    MIN_ANOMALY_CONFIDENCE,
-    MIN_ANOMALY_REQUEST_COUNT,
     MIN_ATTACK_CONFIDENCE,
     MULTI_ATTACK_LABEL,
 )
 from .feature_engineering import align_feature_columns, extract_features
+from .mitre import MITRE, MITRE_DEFAULT, SQLI_RE, XSS_RE
 from .parser import build_full_url
-from .mitre import MITRE
 
 
 def _coerce_predictions(values) -> np.ndarray:
@@ -31,6 +31,41 @@ def _severity_from_confidence(confidence: float) -> str:
     if confidence >= 0.7:
         return "MEDIUM"
     return "LOW"
+
+
+def _build_signature_masks(requests: pd.DataFrame) -> tuple[pd.Series, pd.Series]:
+    full_url = (requests["path"].fillna("") + "?" + requests["query"].fillna("")).astype(str)
+    decoded_url = full_url.apply(lambda value: unquote(value))
+    xss_mask = decoded_url.str.contains(XSS_RE, na=False)
+    sqli_mask = decoded_url.str.contains(SQLI_RE, na=False) & ~xss_mask
+    return sqli_mask, xss_mask
+
+
+def _apply_signature_overrides(
+    requests: pd.DataFrame,
+    sqli_mask: pd.Series,
+    xss_mask: pd.Series,
+) -> pd.DataFrame:
+    # Strong regex signatures should win over ambiguous model-only labels.
+    unsupported_content_attack = (
+        ((requests["ml_label"] == "SQLI") & ~sqli_mask)
+        | ((requests["ml_label"] == "XSS") & ~xss_mask)
+    )
+    requests.loc[unsupported_content_attack, "ml_label"] = "NORMAL"
+
+    if xss_mask.any():
+        requests.loc[xss_mask, "ml_label"] = "XSS"
+        requests.loc[xss_mask, "ml_confidence"] = requests.loc[xss_mask, "ml_confidence"].clip(
+            lower=MIN_ATTACK_CONFIDENCE
+        )
+
+    if sqli_mask.any():
+        requests.loc[sqli_mask, "ml_label"] = "SQLI"
+        requests.loc[sqli_mask, "ml_confidence"] = requests.loc[sqli_mask, "ml_confidence"].clip(
+            lower=MIN_ATTACK_CONFIDENCE
+        )
+
+    return requests
 
 
 class MLDetector:
@@ -52,6 +87,17 @@ class MLDetector:
         try:
             self.model.load_model(self.model_path)
             self.classes = [str(label) for label in getattr(self.model, "classes_", [])]
+            expected_classes = list(ATTACK_LABELS)
+            if self.classes and self.classes != expected_classes:
+                self.load_error = (
+                    "Incompatible CatBoost model classes. "
+                    f"Expected {expected_classes}, got {self.classes}. "
+                    "Regenerate the dataset and retrain the model."
+                )
+                self.ready = False
+                if strict:
+                    raise RuntimeError(self.load_error)
+                return
             self.ready = True
         except Exception as exc:
             self.load_error = f"Failed to load CatBoost model: {exc}"
@@ -80,8 +126,9 @@ class MLDetector:
         requests["ml_label"] = predictions
         requests["ml_confidence"] = confidences.astype(float)
         low_confidence_attack = (requests["ml_label"] != "NORMAL") & (requests["ml_confidence"] < MIN_ATTACK_CONFIDENCE)
-        low_confidence_anomaly = (requests["ml_label"] == "ANOMALY") & (requests["ml_confidence"] < MIN_ANOMALY_CONFIDENCE)
-        requests.loc[low_confidence_attack | low_confidence_anomaly, "ml_label"] = "NORMAL"
+        requests.loc[low_confidence_attack, "ml_label"] = "NORMAL"
+        sqli_mask, xss_mask = _build_signature_masks(requests)
+        requests = _apply_signature_overrides(requests, sqli_mask=sqli_mask, xss_mask=xss_mask)
         return requests
 
     def predict(self, df: pd.DataFrame) -> list[dict]:
@@ -98,7 +145,6 @@ class MLDetector:
         attack_requests.loc[attack_requests["ml_label"] == "DOS", "group_ip"] = MULTI_ATTACK_LABEL
 
         incidents: list[dict] = []
-        suppressed_count = 0
         for (group_ip, attack_type, window), group in attack_requests.groupby(
             ["group_ip", "ml_label", "window"],
             sort=True,
@@ -106,11 +152,6 @@ class MLDetector:
         ):
             request_count = len(group)
             incident_confidence = float(group["ml_confidence"].max())
-
-            # Filter out ANOMALY incidents with too few requests (likely false positives)
-            if attack_type == "ANOMALY" and request_count < MIN_ANOMALY_REQUEST_COUNT:
-                suppressed_count += 1
-                continue
 
             sample_urls = []
             for _, row in group.head(3).iterrows():
@@ -121,7 +162,7 @@ class MLDetector:
                 f"Samples: {'; '.join(sample_urls)}"
             )[:280]
 
-            mitre = MITRE.get(attack_type, MITRE["ANOMALY"])
+            mitre = MITRE.get(attack_type, MITRE_DEFAULT)
             incidents.append(
                 {
                     "type": str(attack_type),
@@ -132,13 +173,9 @@ class MLDetector:
                     "evidence": evidence,
                     "confidence": round(incident_confidence, 3),
                     "request_count": int(request_count),
-                    "suppressed_anomalies": 0,
                     **mitre,
                 }
             )
-
-        if suppressed_count and incidents:
-            incidents[0]["suppressed_anomalies"] = suppressed_count
 
         incidents.sort(key=lambda incident: (pd.Timestamp(incident["start"]), incident["type"], incident["ip"]))
         return incidents

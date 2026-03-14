@@ -13,7 +13,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
-from config import ATTACK_COLORS, FIG_DPI, FIG_SIZE
+from config import ATTACK_COLORS, ATTACK_LABELS, FIG_DPI, FIG_SIZE
 
 
 def ensure_dir(path: str):
@@ -81,7 +81,6 @@ def plot_attacks_over_time(
     incidents_df: pd.DataFrame,
     out_path: str,
     bucket: str = "5min",
-    include_anomalies: bool = True,
     min_confidence: float = 0.0,
 ):
     if incidents_df.empty:
@@ -92,12 +91,10 @@ def plot_attacks_over_time(
     data["start"] = pd.to_datetime(data["start"], errors="coerce")
     data["type"] = data["type"].fillna("").astype(str).str.upper()
     data = data.dropna(subset=["start"])
-    if not include_anomalies:
-        data = data[data["type"] != "ANOMALY"]
     # Filter out low-confidence incidents from the chart
     if min_confidence > 0 and "confidence" in data.columns:
-        conf = pd.to_numeric(data["confidence"], errors="coerce").fillna(0)
-        data = data[conf >= min_confidence]
+        conf = pd.to_numeric(data["confidence"], errors="coerce")
+        data = data[conf.isna() | (conf >= min_confidence)]
 
     if data.empty:
         _plot_empty(out_path, "No attacks detected", "No incidents were detected for this log.")
@@ -109,7 +106,9 @@ def plot_attacks_over_time(
         _plot_empty(out_path, "No attacks detected", "No incidents were detected for this log.")
         return
 
-    ordered_types = pivot.sum(axis=0).sort_values(ascending=False).index
+    attack_order = [label for label in ATTACK_LABELS if label != "NORMAL"]
+    ordered_types = [label for label in attack_order if label in pivot.columns]
+    ordered_types.extend(sorted(set(pivot.columns) - set(ordered_types)))
     pivot = pivot[ordered_types]
 
     fig, ax = plt.subplots(figsize=(12.8, 6.2))
@@ -143,7 +142,7 @@ def plot_attacks_over_time(
     ax.set_xticklabels(tick_labels)
     plt.setp(ax.get_xticklabels(), rotation=22, ha="right")
 
-    ax.set_title("ML Incident Timeline", fontsize=13, fontweight="bold")
+    ax.set_title("Incident Timeline", fontsize=13, fontweight="bold")
     ax.set_xlabel("Time Buckets")
     ax.set_ylabel("Incidents")
     ax.margins(y=0.08)
@@ -175,7 +174,7 @@ def plot_confidence_distribution(incidents_df: pd.DataFrame, out_path: str):
     bins = np.linspace(0, 1, 11)
     ax.hist(scores, bins=bins, color="#2A9D8F", edgecolor="white", alpha=0.9)
     ax.set_xlim(0, 1)
-    ax.set_title("Confidence Distribution", fontsize=13, fontweight="bold")
+    ax.set_title("Model Confidence Distribution", fontsize=13, fontweight="bold")
     ax.set_xlabel("Confidence")
     ax.set_ylabel("Incidents")
     _style_axes(ax, grid_axis="y")

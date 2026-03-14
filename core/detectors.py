@@ -4,6 +4,7 @@ Regex-based детекторы атак.
 """
 
 import re
+from urllib.parse import unquote
 import pandas as pd
 
 from config import DOS_RPS_THRESHOLD, MULTI_ATTACK_LABEL
@@ -38,7 +39,9 @@ def detect_bruteforce(df: pd.DataFrame, win_min: int = 5, thr: int = 10):
 # Сигнатурный поиск SQLi в URL и query.
 def detect_sqli(df: pd.DataFrame):
     s = (df["path"].fillna("") + "?" + df["query"].fillna("")).astype(str)
-    mask = s.str.contains(SQLI_RE)
+    decoded = s.apply(lambda value: unquote(value))
+    xss_mask = decoded.str.contains(XSS_RE, na=False)
+    mask = decoded.str.contains(SQLI_RE, na=False) & ~xss_mask
     hits = df[mask].copy()
 
     incidents = []
@@ -57,7 +60,8 @@ def detect_sqli(df: pd.DataFrame):
 # Сигнатурный поиск XSS в URL и query.
 def detect_xss(df: pd.DataFrame):
     s = (df["path"].fillna("") + "?" + df["query"].fillna("")).astype(str)
-    mask = s.str.contains(XSS_RE, na=False)
+    decoded = s.apply(lambda value: unquote(value))
+    mask = decoded.str.contains(XSS_RE, na=False)
     hits = df[mask].copy()
 
     incidents = []

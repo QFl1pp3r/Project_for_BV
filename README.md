@@ -1,13 +1,12 @@
 # Интеллектуальный анализатор access-логов
 
-Flask-приложение для анализа HTTP access-логов Nginx/Apache. Основной детектор теперь использует предобученную CatBoost-модель с 6 классами:
+Flask-приложение для анализа HTTP access-логов Nginx/Apache. Основной детектор использует CatBoost-модель с 5 классами:
 
 - `NORMAL`
 - `SQLI`
 - `XSS`
 - `BRUTE_FORCE`
 - `DOS`
-- `ANOMALY`
 
 Regex-детекторы сохранены как baseline для side-by-side сравнения с ML. Важно: это не ground truth и не замена полноценной ML-валидации на размеченном датасете.
 
@@ -15,7 +14,7 @@ Regex-детекторы сохранены как baseline для side-by-side 
 
 Текущая реализация — `PoC / demo`, а не production-ready SOC/IR инструмент.
 
-- Онлайн-отчет показывает только степень совпадения `ML vs Regex baseline`.
+- Онлайн-отчет показывает объединенные инциденты `ML + Regex` и метрики последнего обучения модели.
 - Настоящие ML-метрики качества нужно считать офлайн на отдельном размеченном validation-наборе.
 - Если внешний validation-набор не предоставлен, все метрики обучения относятся только к внутреннему holdout-сплиту и не доказывают готовность модели к реальному трафику.
 
@@ -53,6 +52,8 @@ python3 tools/train_model.py \
 
 После этого Flask-приложение будет использовать `models/attack_detector.cbm` как основной детектор.
 
+Важно: старые артефакты модели и метрик, обученные на 6-классовой схеме с `ANOMALY`, больше не совместимы. После изменения схемы классов нужно заново собрать датасет и переобучить модель.
+
 ## Запуск приложения
 
 Локально:
@@ -79,7 +80,12 @@ python3 tools/generate_logs.py --mode bruteforce > test_logs/demo_bf.log
 python3 tools/generate_logs.py --mode sqli > test_logs/demo_sqli.log
 python3 tools/generate_logs.py --mode xss > test_logs/demo_xss.log
 python3 tools/generate_logs.py --mode dos > test_logs/demo_dos.log
+python3 tools/generate_logs.py --mode campaign > test_logs/demo_campaign.log
 ```
+
+`mixed` использует только поддерживаемые типы атак `SQLI/XSS/BRUTE_FORCE/DOS`, а `campaign` фиксирован как demo-цепочка `BRUTE_FORCE -> SQLI -> XSS` без `DOS`.
+
+При импорте внешних датасетов (`CSIC` / `CICIDS`) в итоговый CSV попадают только строки с метками `NORMAL/SQLI/XSS/BRUTE_FORCE/DOS`; все остальные классы отбрасываются.
 
 ## Что строится в отчете
 
@@ -88,10 +94,10 @@ python3 tools/generate_logs.py --mode dos > test_logs/demo_dos.log
 - график нагрузки по минутам
 - топ IP
 - распределение confidence модели
-- сравнение `ML vs Regex baseline`
-- таблица инцидентов с confidence и признаком совпадения с regex
+- таблица метрик последнего обучения CatBoost
+- таблица объединенных инцидентов с источником `ML`, `Regex` или `ML + Regex`
 
-Важно: блок `ML vs Regex baseline` в веб-интерфейсе не является оценкой точности модели по разметке.
+Важно: метрики CatBoost в веб-интерфейсе относятся к последнему офлайн-обучению на holdout/validation, а не к текущему загруженному логу.
 
 ## Структура
 

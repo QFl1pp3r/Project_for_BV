@@ -25,11 +25,12 @@ MITRE = {
         "technique": "Network Denial of Service",
         "technique_id": "T1498",
     },
-    "ANOMALY": {
-        "tactic": "Discovery / Reconnaissance",
-        "technique": "Behavioral Anomaly",
-        "technique_id": "N/A",
-    },
+}
+
+MITRE_DEFAULT = {
+    "tactic": "Unknown",
+    "technique": "Unknown",
+    "technique_id": "N/A",
 }
 # ---------------------------------------------------------------------------
 # SQLI and XSS patterns
@@ -37,12 +38,17 @@ MITRE = {
 
 
 SQLI_PATTERNS = [
-    r"(?:\%27)|(?:')|(?:\-\-)|(?:\%23)|(?:#)",
-    r"\bunion\b.*\bselect\b",
-    r"\bor\b\s+1=1",
-    r"\bselect\b.+\bfrom\b",
+    r"(?:['\"])\s*(?:or|and)\s*(?:['\"]?\d+['\"]?\s*=\s*['\"]?\d+['\"]?|['\"][^'\"]+['\"]\s*=\s*['\"][^'\"]+['\"])",
+    r"\b(?:or|and)\s+\d+\s*=\s*\d+",
+    r"\bunion\b(?:[\s\S]{0,80})\bselect\b",
+    r"\bselect\b(?:[\s\S]{0,80})\bfrom\b",
     r"\binformation_schema\b",
-    r"\bsleep\(",
+    r"\b(?:sleep|benchmark|load_file|extractvalue)\s*\(",
+    r"\bwaitfor\s+delay\b",
+    r"\bxp_cmdshell\b",
+    r";\s*(?:select|drop|insert|update|delete|exec|execute)\b",
+    r"\bdrop\s+table\b",
+    r"\bhaving\s+\d+\s*=\s*\d+",
 ]
 
 SQLI_RE = re.compile("|".join(SQLI_PATTERNS), flags=re.IGNORECASE)

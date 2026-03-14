@@ -1,11 +1,24 @@
-# Интелектуальный Аналайзер логов
+# Интеллектуальный анализатор access-логов
 
-Минимальный веб‑анализатор access‑логов (Nginx/Apache) с простыми детекторами:
-Brute Force, SQLi, XSS, DoS и ML‑аномалии. Результат — HTML‑отчет, CSV со списком инцидентов и история сохраненных анализов.
+Flask-приложение для анализа HTTP access-логов Nginx/Apache. Основной детектор использует CatBoost-модель с 5 классами:
+
+- `NORMAL`
+- `SQLI`
+- `XSS`
+- `BRUTE_FORCE`
+- `DOS`
+
+Regex-детекторы сохранены как baseline для side-by-side сравнения с ML. Важно: это не ground truth и не замена полноценной ML-валидации на размеченном датасете.
+
+## Статус проекта
+
+Текущая реализация — `PoC / demo`, а не production-ready SOC/IR инструмент.
+
+- Онлайн-отчет показывает объединенные инциденты `ML + Regex` и метрики последнего обучения модели.
+- Настоящие ML-метрики качества нужно считать офлайн на отдельном размеченном validation-наборе.
+- Если внешний validation-набор не предоставлен, все метрики обучения относятся только к внутреннему holdout-сплиту и не доказывают готовность модели к реальному трафику.
 
 ## Быстрый старт
-
-1) Установка зависимостей:
 
 ```bash
 python3 -m venv .venv
@@ -13,70 +26,90 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
+## Подготовка модели
 
-## Запуск приложение
+1. Сгенерировать датасет:
 
-1) Запуск локально на машине:
-Нужно изменить строчуку в app.py
-Затем прописать команду:
 ```bash
-python3 app.py 
+python3 tools/generate_dataset.py --output data/dataset.csv --total 120000
 ```
-Откройте в браузере: http://127.0.0.1:5000/
 
-2) Запуск с помощью докера:
+2. Обучить CatBoost:
+
+```bash
+python3 tools/train_model.py --dataset data/dataset.csv --output models/attack_detector.cbm --metrics models/metrics.json
+```
+
+3. При наличии отдельного размеченного validation-набора выполнить внешнюю офлайн-валидацию:
+
+```bash
+python3 tools/train_model.py \
+  --dataset data/dataset.csv \
+  --validation-dataset data/validation_dataset.csv \
+  --output models/attack_detector.cbm \
+  --metrics models/metrics.json
+```
+
+После этого Flask-приложение будет использовать `models/attack_detector.cbm` как основной детектор.
+
+Важно: старые артефакты модели и метрик, обученные на 6-классовой схеме с `ANOMALY`, больше не совместимы. После изменения схемы классов нужно заново собрать датасет и переобучить модель.
+
+## Запуск приложения
+
+Локально:
+
+```bash
+python3 app.py
+```
+
+Открыть в браузере: `http://127.0.0.1:5000/`
+
+Docker:
 
 ```bash
 docker compose up --build
 ```
 
-Откройте в браузере: http://127.0.0.1:5001/
+Открыть в браузере: `http://127.0.0.1:5001/`
 
-## Как сгенерировать тестовые логи
-
-Генератор находится в `tools/generate_logs.py`. Он пишет в stdout, поэтому
-удобно перенаправить вывод в файл.
-
-Примеры:
+## Генерация тестовых логов
 
 ```bash
-# Смешанный сценарий (норма + атаки)
-python tools/generate_logs.py --mode mixed > test_logs/demo_mixed.log
-
-# Только brute force
-python tools/generate_logs.py --mode bruteforce > test_logs/demo_bruteforce.log
-
-# Только SQLi
-python tools/generate_logs.py --mode sqli > test_logs/demo_sqli.log
-
-# Только XSS
-python tools/generate_logs.py --mode xss > test_logs/demo_xss.log
-
-# Только DoS
-python tools/generate_logs.py --mode dos > test_logs/demo_dos.log
+python3 tools/generate_logs.py --mode mixed > test_logs/demo_mixed.log
+python3 tools/generate_logs.py --mode bruteforce > test_logs/demo_bf.log
+python3 tools/generate_logs.py --mode sqli > test_logs/demo_sqli.log
+python3 tools/generate_logs.py --mode xss > test_logs/demo_xss.log
+python3 tools/generate_logs.py --mode dos > test_logs/demo_dos.log
+python3 tools/generate_logs.py --mode campaign > test_logs/demo_campaign.log
 ```
 
-После генерации загрузите файл через веб‑форму.
+`mixed` использует только поддерживаемые типы атак `SQLI/XSS/BRUTE_FORCE/DOS`, а `campaign` фиксирован как demo-цепочка `BRUTE_FORCE -> SQLI -> XSS` без `DOS`.
 
-## Что поддерживается
+При импорте внешних датасетов (`CSIC` / `CICIDS`) в итоговый CSV попадают только строки с метками `NORMAL/SQLI/XSS/BRUTE_FORCE/DOS`; все остальные классы отбрасываются.
 
-- Форматы логов: combined и common.
-- Расширения файлов: `.log`, `.txt` (лимит 15 MB).
-- Графики: запросы в минуту, таймлайн атак и топ‑IP.
-- История анализов: повторное открытие отчетов, скачивание CSV, удаление одного анализа или очистка всей истории.
+## Что строится в отчете
 
-## Структура проекта
+- KPI по логу и найденным инцидентам
+- таймлайн инцидентов
+- график нагрузки по минутам
+- топ IP
+- распределение confidence модели
+- таблица метрик последнего обучения CatBoost
+- таблица объединенных инцидентов с источником `ML`, `Regex` или `ML + Regex`
 
-- `app.py` — Flask‑приложение и маршруты.
-- `parser.py` — парсер строк access‑лога.
-- `detectors.py` — правила детекторов и ML‑аномалии.
-- `report.py` — построение графиков и экспорт CSV.
-- `history_store.py` — JSON‑хранилище истории анализов.
-- `templates/` — HTML‑шаблоны.
-- `tools/generate_logs.py` — генератор тестовых логов.
-- `test_logs/` — примеры логов.
+Важно: метрики CatBoost в веб-интерфейсе относятся к последнему офлайн-обучению на holdout/validation, а не к текущему загруженному логу.
 
-## Заметки
+## Структура
 
-- Сгенерированные графики и CSV лежат в `static/generated/`.
-- История анализов хранится в `data/analysis_history.json`.
+- `app.py` — Flask и orchestration анализа
+- `parser.py` — парсер access-логов
+- `feature_engineering.py` — извлечение признаков
+- `ml_detector.py` — CatBoost inference
+- `accuracy.py` — сравнение ML и regex
+- `detectors.py` — regex baseline
+- `report.py` — генерация графиков и CSV
+- `tools/generate_dataset.py` — сборка обучающего датасета
+- `tools/train_model.py` — обучение CatBoost
+- `tools/generate_logs.py` — генератор демо-логов
+- `models/` — модель и метрики обучения
+- `data/` — датасеты

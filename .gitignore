@@ -4,4 +4,8 @@ __pycache__/
 .ipynb_checkpoints/
 .vscode/
 static/*
-data/*.json
+catboost_info/*
+.pytest_cache/
+uploads/
+
+

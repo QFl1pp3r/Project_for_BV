@@ -7,12 +7,12 @@
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
   <style>
     body {
-      background: #f5f7fb;
+      background: linear-gradient(180deg, #f4f7fb 0%, #eef2f7 100%);
     }
     .report-card {
       border: 0;
-      border-radius: 14px;
-      box-shadow: 0 8px 24px rgba(18, 38, 63, 0.08);
+      border-radius: 16px;
+      box-shadow: 0 12px 30px rgba(18, 38, 63, 0.08);
     }
     .kpi {
       font-weight: 700;
@@ -31,6 +31,9 @@
     .badge-type {
       font-size: 0.72rem;
       letter-spacing: 0.2px;
+    }
+    .mono {
+      font-variant-numeric: tabular-nums;
     }
     .meta-line {
       color: #6c757d;
@@ -51,33 +54,44 @@
   <div class="d-flex justify-content-between align-items-start mb-3 flex-wrap gap-3">
     <div>
       <h1 class="h3 mb-1">Отчет анализа</h1>
-      <div class="meta-line">Файл: {{ source_name }}</div>
-      <div class="meta-line">Сохранен: {{ created_at_fmt }} | Размер: {{ size_fmt }}</div>
+      <div class="meta-line">Файл: {{ source_name or "unknown.log" }}</div>
+      <div class="meta-line">Сохранен: {{ created_at_fmt or "n/a" }} | Размер: {{ size_fmt or "n/a" }}</div>
+      <p class="text-muted mb-0">Объединенный анализ access-лога: CatBoost + regex-правила без дублей по одному инциденту.</p>
     </div>
     <div class="d-flex flex-wrap gap-2">
-      <a class="btn btn-outline-secondary" href="{{ history_url }}">К истории</a>
+      <a class="btn btn-outline-secondary" href="{{ history_url or '/' }}">К истории</a>
       <a class="btn btn-success" href="{{ csv_url }}">Скачать CSV</a>
-      <form action="{{ delete_url }}" method="post" onsubmit="return confirm('Удалить этот анализ и связанные файлы?');">
-        <button class="btn btn-outline-danger">Удалить</button>
-      </form>
+      {% if delete_url %}
+        <form action="{{ delete_url }}" method="post" onsubmit="return confirm('Удалить этот анализ и связанные файлы?');">
+          <button class="btn btn-outline-danger">Удалить</button>
+        </form>
+      {% endif %}
     </div>
   </div>
-  <p class="text-muted">Короткая сводка по запросам и найденным инцидентам.</p>
+
+  {% if model_error %}
+    <div class="alert alert-warning report-card">
+      <strong>ML-модель недоступна.</strong> {{ model_error }}.
+      Отчет построен в fallback-режиме по regex-детекторам.
+    </div>
+  {% endif %}
 
   <div class="row g-3 mb-3">
-    <div class="col-md-3"><div class="card report-card p-3"><div class="text-muted">Запросов</div><div class="h4 kpi">{{ summary.total_requests }}</div></div></div>
-    <div class="col-md-3"><div class="card report-card p-3"><div class="text-muted">Уник. IP</div><div class="h4 kpi">{{ summary.unique_ips }}</div></div></div>
-    <div class="col-md-3"><div class="card report-card p-3"><div class="text-muted">Инцидентов</div><div class="h4 kpi">{{ summary.incidents_total }}</div></div></div>
-    <div class="col-md-3"><div class="card report-card p-3"><div class="text-muted">Период</div>
-      <div class="small">{{ summary.time_min }}<br>{{ summary.time_max }}</div></div></div>
+    <div class="col-md-3"><div class="card report-card p-3"><div class="text-muted">Запросов</div><div class="h4 kpi mono">{{ summary.total_requests }}</div></div></div>
+    <div class="col-md-3"><div class="card report-card p-3"><div class="text-muted">Уник. IP</div><div class="h4 kpi mono">{{ summary.unique_ips }}</div></div></div>
+    <div class="col-md-3"><div class="card report-card p-3"><div class="text-muted">Серий атак</div><div class="h4 kpi mono">{{ summary.incidents_total }}</div><div class="text-muted small">{{ summary.detected_requests_total }} подозр. запросов</div></div></div>
+    <div class="col-md-3"><div class="card report-card p-3"><div class="text-muted">Период</div><div class="small">{{ summary.time_min }}<br>{{ summary.time_max }}</div></div></div>
   </div>
 
   <div class="card report-card p-3 mb-3">
-    <h2 class="h5">Статистика по типам</h2>
+    <div class="d-flex justify-content-between align-items-center mb-2">
+      <h2 class="h5 mb-0">Статистика по типам</h2>
+      <span class="badge rounded-pill text-bg-dark">{{ "ML + REGEX" if analysis_mode == "ml" else "REGEX FALLBACK" }}</span>
+    </div>
     <div class="small">
       {% if counts %}
-        {% for k, v in counts.items() %}
-          <span class="badge rounded-pill text-bg-secondary me-2 badge-type">{{ k }}: {{ v }}</span>
+        {% for row in counts %}
+          <span class="badge rounded-pill text-bg-secondary me-2 badge-type">{{ row.label }}: {{ row.requests }} зап. / {{ row.incidents }} сер.</span>
         {% endfor %}
       {% else %}
         На данный момент инцидентов не найдено.
@@ -86,10 +100,64 @@
   </div>
 
   <div class="card report-card p-3 mb-3">
+    <div class="d-flex justify-content-between align-items-center mb-2">
+      <div>
+        <h2 class="h5 mb-1">Метрики CatBoost</h2>
+        <p class="text-muted small mb-0">Показатели последнего сохраненного обучения модели на holdout-выборке, не на текущем загруженном логе.</p>
+      </div>
+      {% if model_metrics %}
+        <span class="badge rounded-pill text-bg-dark">{{ model_metrics.validation_scope_label }}</span>
+      {% endif %}
+    </div>
+    {% if model_metrics %}
+      <div class="row g-3 mb-3">
+        <div class="col-md-3"><div class="border rounded-3 p-3 bg-light-subtle"><div class="text-muted small">Accuracy</div><div class="h5 mono mb-0">{{ model_metrics.accuracy_fmt }}</div></div></div>
+        <div class="col-md-3"><div class="border rounded-3 p-3 bg-light-subtle"><div class="text-muted small">Macro F1</div><div class="h5 mono mb-0">{{ model_metrics.macro_f1_fmt }}</div></div></div>
+        <div class="col-md-3"><div class="border rounded-3 p-3 bg-light-subtle"><div class="text-muted small">Macro Precision</div><div class="h5 mono mb-0">{{ model_metrics.macro_precision_fmt }}</div></div></div>
+        <div class="col-md-3"><div class="border rounded-3 p-3 bg-light-subtle"><div class="text-muted small">Macro Recall</div><div class="h5 mono mb-0">{{ model_metrics.macro_recall_fmt }}</div></div></div>
+      </div>
+
+      <div class="small text-muted mb-3">
+        Обучено: {{ model_metrics.trained_at_fmt or "n/a" }}.
+        Train/Test: <span class="mono">{{ model_metrics.train_size or "n/a" }}/{{ model_metrics.test_size or "n/a" }}</span>.
+        Iterations: <span class="mono">{{ model_metrics.iterations or "n/a" }}</span>,
+        depth: <span class="mono">{{ model_metrics.depth or "n/a" }}</span>,
+        learning rate: <span class="mono">{{ model_metrics.learning_rate if model_metrics.learning_rate is not none else "n/a" }}</span>.
+        Weighted F1: <span class="mono">{{ model_metrics.weighted_f1_fmt }}</span>.
+      </div>
+
+      <div class="table-responsive mt-2">
+        <table class="table table-sm align-middle">
+          <thead>
+            <tr>
+              <th>Класс</th>
+              <th>Precision</th>
+              <th>Recall</th>
+              <th>F1</th>
+              <th>Support</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in model_metrics.per_class %}
+              <tr>
+                <td><span class="badge rounded-pill text-bg-dark badge-type">{{ row.label }}</span></td>
+                <td class="mono">{{ row.precision_fmt }}</td>
+                <td class="mono">{{ row.recall_fmt }}</td>
+                <td class="mono">{{ row.f1_fmt }}</td>
+                <td class="mono">{{ row.support if row.support is not none else "n/a" }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <p class="text-muted mb-0">{{ model_metrics_error or "Метрики CatBoost пока недоступны." }}</p>
+    {% endif %}
+  </div>
+
+  <div class="card report-card p-3 mb-3">
     <h2 class="h6 mb-1">График атак</h2>
-    <p class="text-muted small mb-3">
-      Распределение rule-based инцидентов по времени и типу атаки.
-    </p>
+    <p class="text-muted small mb-3">Распределение объединенных инцидентов по времени и типу атаки.</p>
     <img class="chart-image" src="{{ chart_attacks }}" alt="Attack timeline chart">
   </div>
 
@@ -108,13 +176,26 @@
     </div>
   </div>
 
+  <div class="card report-card p-3 mb-3">
+    <h2 class="h6">Уверенность модели</h2>
+    <p class="text-muted small mb-3">Показывает confidence только для тех инцидентов, где сработала CatBoost-модель.</p>
+    <img class="chart-image" src="{{ chart_confidence }}" alt="Confidence chart">
+  </div>
+
   <div class="card report-card p-3">
     <h2 class="h5">Инциденты</h2>
     <div class="table-responsive">
       <table class="table table-sm table-striped align-middle">
         <thead>
           <tr>
-            <th>Тип</th><th>Severity</th><th>IP</th><th>Время</th><th>MITRE</th><th>Доказательства</th>
+            <th>Тип</th>
+            <th>Severity</th>
+            <th>Источник</th>
+            <th>Confidence</th>
+            <th>IP</th>
+            <th>Время</th>
+            <th>MITRE</th>
+            <th>Доказательства</th>
           </tr>
         </thead>
         <tbody>
@@ -134,15 +215,25 @@
                   <span class="badge text-bg-secondary">{{ inc.severity }}</span>
                 {% endif %}
               </td>
+              <td>
+                {% if inc.source == "ML + Regex" %}
+                  <span class="badge text-bg-success">{{ inc.source }}</span>
+                {% elif inc.source == "ML" %}
+                  <span class="badge text-bg-primary">{{ inc.source }}</span>
+                {% else %}
+                  <span class="badge text-bg-secondary">{{ inc.source }}</span>
+                {% endif %}
+              </td>
+              <td class="small mono">{{ inc.confidence_fmt or "n/a" }}</td>
               <td>{{ inc.ip }}</td>
-              <td class="small">{{ inc.start_fmt }} — {{ inc.end_fmt }}</td>
+              <td class="small">{{ inc.start_fmt }}<br>{{ inc.end_fmt }}</td>
               <td class="small">{{ inc.technique_id }} / {{ inc.technique }} ({{ inc.tactic }})</td>
               <td class="small">{{ inc.evidence }}</td>
             </tr>
             {% endfor %}
           {% else %}
             <tr>
-              <td colspan="6" class="text-muted">Пока ничего подозрительного не найдено.</td>
+              <td colspan="8" class="text-muted">Пока ничего подозрительного не найдено.</td>
             </tr>
           {% endif %}
         </tbody>

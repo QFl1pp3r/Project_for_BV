@@ -87,6 +87,59 @@ python3 tools/generate_logs.py --mode campaign > test_logs/demo_campaign.log
 
 При импорте внешних датасетов (`CSIC` / `CICIDS`) в итоговый CSV попадают только строки с метками `NORMAL/SQLI/XSS/BRUTE_FORCE/DOS`; все остальные классы отбрасываются.
 
+## Лабораторный уязвимый веб-сервис
+
+В репозитории добавлен отдельный сервис `vulnerable_service/` для реализации реалистичных access-логов.
+
+Сервис намеренно содержит сценарии, которые соответствуют классам детектора:
+
+- `SQLI` через поиск в `/cats?q=...`
+- `XSS` через параметр `note` и посты `/community`
+- `BRUTE_FORCE` через повторные неуспешные `POST /account/login` (`401`)
+- `DOS` через burst-запросы на `/api/cat-feed`
+
+Запуск сервиса:
+
+```bash
+cd vulnerable_service
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+python app.py
+```
+
+По умолчанию сервис доступен на `http://127.0.0.1:8080`.
+
+Все HTTP-запросы сохраняются в:
+
+```text
+vulnerable_service/logs/access.log
+```
+
+## Attack-скрипт для сервиса
+
+Добавлен внешний скрипт `tools/attack_lab_service.py`, который:
+
+- генерирует трафик по всем 4 сценариям (`SQLI/XSS/BRUTE_FORCE/DOS`)
+- берёт только новые строки из `vulnerable_service/logs/access.log`
+- сохраняет их в отдельный файл для загрузки в детектор
+
+Пример:
+
+```bash
+python3 tools/attack_lab_service.py \
+  --base-url http://127.0.0.1:8080 \
+  --service-log vulnerable_service/logs/access.log \
+  --output test_logs/lab_attack.log
+```
+
+Полезные параметры:
+
+- `--bf-attempts` (по умолчанию `14`)
+- `--dos-requests` (по умолчанию `220`)
+- `--dos-units` (по умолчанию `5000`)
+- `--dos-workers` (по умолчанию `20`)
+
 ## Что строится в отчете
 
 - KPI по логу и найденным инцидентам

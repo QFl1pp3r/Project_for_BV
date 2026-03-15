@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="panel">
+  <h1>Cat Catalog</h1>
+  <p class="subtitle">Find cats by name, breed, or text in profile notes.</p>
+
+  <form method="get" class="stack-form">
+    <label for="q">Search</label>
+    <input id="q" name="q" value="{{ query }}" placeholder="maine, playful, luna">
+    <button class="btn" type="submit">Search</button>
+  </form>
+
+  {% if error %}
+    <p class="notice danger">Search failed: {{ error }}</p>
+  {% endif %}
+
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>Name</th>
+          <th>Breed</th>
+          <th>Age (months)</th>
+          <th>Fee</th>
+          <th>Bio</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in rows %}
+          <tr>
+            <td>{{ row["id"] }}</td>
+            <td>{{ row["name"] }}</td>
+            <td>{{ row["breed"] }}</td>
+            <td>{{ row["age_months"] }}</td>
+            <td>${{ "%.2f"|format(row["fee"]) }}</td>
+            <td>{{ row["bio"] }}</td>
+          </tr>
+        {% else %}
+          <tr>
+            <td colspan="6">No cats found.</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endblock %}

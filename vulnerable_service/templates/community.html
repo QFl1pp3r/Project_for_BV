@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="panel">
+  <h1>Community Board</h1>
+  <p class="subtitle">Share your stories, habits, and health tips for indoor cats.</p>
+
+  <form method="get" class="stack-form">
+    <label for="note">Highlight note</label>
+    <input id="note" name="note" value="{{ note }}" placeholder="Welcome to KittyHub!">
+    <button class="btn" type="submit">Show Note</button>
+  </form>
+
+  <div class="notice">{{ note|safe }}</div>
+
+  <form method="post" class="stack-form">
+    <label for="author">Name</label>
+    <input id="author" name="author" placeholder="cat_parent_01">
+
+    <label for="message">Message</label>
+    <textarea id="message" name="message" rows="4" placeholder="My cat finally stopped scratching the sofa."></textarea>
+
+    <button class="btn" type="submit">Publish</button>
+  </form>
+</section>
+
+<section class="panel">
+  <h2>Latest Posts</h2>
+  <div class="message-list">
+    {% for row in entries %}
+      <article class="message-item">
+        <div class="message-head">
+          <strong>{{ row["author"] }}</strong>
+          <span>{{ row["created_at"] }}</span>
+        </div>
+        <div class="message-body">{{ row["message"]|safe }}</div>
+      </article>
+    {% else %}
+      <p class="notice">No posts yet.</p>
+    {% endfor %}
+  </div>
+</section>
+{% endblock %}

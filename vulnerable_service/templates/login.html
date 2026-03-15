@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="panel">
+  <h1>Account Login</h1>
+  <p class="subtitle">Sign in to save favorite cats and application drafts.</p>
+
+  <form method="post" class="stack-form">
+    <label for="username">Username</label>
+    <input id="username" name="username" autocomplete="off" placeholder="your username">
+
+    <label for="password">Password</label>
+    <input id="password" name="password" type="password" autocomplete="off" placeholder="your password">
+
+    <button class="btn" type="submit">Sign In</button>
+  </form>
+
+  {% if auth_success %}
+    <p class="notice success">Login successful.</p>
+  {% endif %}
+
+  {% if auth_error %}
+    <p class="notice danger">{{ auth_error }}</p>
+  {% endif %}
+
+  <p class="hint">Demo user: <code>{{ demo_user }}</code> / <code>{{ demo_password }}</code></p>
+</section>
+{% endblock %}

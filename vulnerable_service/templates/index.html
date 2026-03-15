@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="hero panel">
+  <p class="eyebrow">Adoption Platform</p>
+  <h1>Find your next cat companion</h1>
+  <p class="subtitle">
+    Browse available cats, chat with the community, and manage your account in one place.
+  </p>
+  <div class="stats-row">
+    <span class="pill">Cats listed: {{ total_cats }}</span>
+    <span class="pill">Community posts: {{ total_posts }}</span>
+  </div>
+</section>
+
+<section class="panel">
+  <h2>Featured Cats</h2>
+  <div class="cat-grid">
+    {% for cat in featured %}
+      <article class="cat-card">
+        <h3>{{ cat["name"] }}</h3>
+        <p class="muted">{{ cat["breed"] }} • {{ cat["age_months"] }} months</p>
+        <p>{{ cat["bio"] }}</p>
+        <p><strong>${{ "%.2f"|format(cat["fee"]) }}</strong> adoption fee</p>
+      </article>
+    {% endfor %}
+  </div>
+</section>
+
+<section class="cards">
+  <article class="panel card">
+    <h2>Catalog</h2>
+    <p>Search by breed, name, or personality notes.</p>
+    <a class="btn" href="{{ url_for('cats_catalog') }}">Open Catalog</a>
+  </article>
+  <article class="panel card">
+    <h2>Community</h2>
+    <p>Share stories and care tips with other cat owners.</p>
+    <a class="btn" href="{{ url_for('community') }}">Open Community</a>
+  </article>
+  <article class="panel card">
+    <h2>Performance</h2>
+    <p>Run feed recommendation generation and check responsiveness.</p>
+    <a class="btn" href="{{ url_for('performance_page') }}">Open Feed API</a>
+  </article>
+</section>
+{% endblock %}

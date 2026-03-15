@@ -1,11 +1,15 @@
 import os
 import sqlite3
+import sys
 import time
 from datetime import datetime
 
 from flask import Flask, g, jsonify, redirect, render_template, request, url_for
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+PROJECT_ROOT = os.path.dirname(BASE_DIR)
+if PROJECT_ROOT not in sys.path:
+    sys.path.insert(0, PROJECT_ROOT)
 DB_PATH = os.path.join(BASE_DIR, "data", "lab.db")
 LOG_PATH = os.path.join(BASE_DIR, "logs", "access.log")
 
@@ -15,7 +19,12 @@ app.config["SECRET_KEY"] = "kittyhub-demo-secret"
 DEMO_USER = "admin"
 DEMO_PASSWORD = "admin123"
 
-
+try:
+    from streaming.flask_middleware import register_redis_logging
+    register_redis_logging(app)
+    print("[STREAMING] Redis logging enabled")
+except Exception as e:
+    print(f"[STREAMING] Redis logging disabled: {e}")
 # ------------------------------
 # Database bootstrap
 # ------------------------------
@@ -245,4 +254,4 @@ def cat_feed_api():
 
 if __name__ == "__main__":
     init_db()
-    app.run(host="0.0.0.0", port=8080, debug=False)
+    app.run(host="0.0.0.0", port=8999, debug=False)

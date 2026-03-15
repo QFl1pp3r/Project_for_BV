@@ -7,5 +7,5 @@ static/*
 catboost_info/*
 .pytest_cache/
 uploads/
-
+test_logs
 

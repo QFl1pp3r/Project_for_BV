@@ -1,11 +1,12 @@
 import os
+import json
 from datetime import datetime, timezone
 from io import BytesIO
 from typing import Optional
 from uuid import uuid4
 
 import pandas as pd
-from flask import Flask, flash, redirect, render_template, request, send_file, url_for
+from flask import Flask, flash, jsonify, redirect, render_template, request, send_file, url_for
 from werkzeug.utils import secure_filename
 
 from core.analysis import build_requests_df, run_analysis
@@ -31,6 +32,7 @@ from core.report import (
     plot_top_ips,
 )
 from history_store import delete_entry, get_entry, init_store, load_history, save_history, upsert_entry
+
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_DIR = os.path.join(BASE_DIR, "data")
@@ -397,6 +399,90 @@ def download_csv(fname: str):
         flash("Файл отчета не найден", "warning")
         return redirect(url_for("index"))
     return send_file(path, as_attachment=True, download_name=fname)
+
+
+# ------------------------------
+# Streaming Dashboard
+# ------------------------------
+def get_streaming_redis():
+    """Lazy Redis connection for streaming dashboard"""
+    try:
+        from streaming.redis_client import r as redis_client
+        redis_client.ping()
+        return redis_client
+    except Exception:
+        return None
+
+
+@app.get("/streaming")
+def streaming_dashboard():
+    return render_template("streaming.html")
+
+
+@app.get("/api/streaming/status")
+def streaming_status():
+    rc = get_streaming_redis()
+    if rc is None:
+        return jsonify({"error": "Redis unavailable"}), 503
+
+    THRESHOLDS = {"normal": 100, "suspicious": 250, "warning": 1000}
+
+    all_ips = rc.hgetall("ip:counter")
+    queue_size = rc.zcard("ip:queue")
+
+    ip_list = []
+    level_counts = {"normal": 0, "suspicious": 0, "warning": 0, "attack": 0}
+
+    for ip, count_str in all_ips.items():
+        count = int(count_str)
+        if count <= THRESHOLDS["normal"]:
+            level = "normal"
+        elif count <= THRESHOLDS["suspicious"]:
+            level = "suspicious"
+        elif count <= THRESHOLDS["warning"]:
+            level = "warning"
+        else:
+            level = "attack"
+
+        level_counts[level] += 1
+        ip_list.append({"ip": ip, "count": count, "level": level})
+
+    ip_list.sort(key=lambda x: x["count"], reverse=True)
+
+    # Последние 20 логов из всех IP (для ленты)
+    recent_logs = []
+    for ip_info in ip_list[:10]:
+        ip = ip_info["ip"]
+        logs = rc.lrange(f"logs:{ip}", -5, -1)
+        for log in logs:
+            recent_logs.append({"ip": ip, "level": ip_info["level"], "raw": log})
+
+    recent_logs = recent_logs[-30:]
+    recent_logs.reverse()
+
+    # ML инциденты
+    ml_incidents = []
+    incidents_file = os.path.join(BASE_DIR, "logs", "ml_incidents.json")
+    if os.path.exists(incidents_file):
+        try:
+            with open(incidents_file, "r") as f:
+                lines = f.readlines()
+                for line in lines[-20:]:
+                    line = line.strip()
+                    if line:
+                        ml_incidents.append(json.loads(line))
+            ml_incidents.reverse()
+        except Exception:
+            pass
+
+    return jsonify({
+        "total_ips": len(all_ips),
+        "queue_size": queue_size,
+        "level_counts": level_counts,
+        "ips": ip_list[:50],
+        "recent_logs": recent_logs,
+        "ml_incidents": ml_incidents,
+    })
 
 
 if __name__ == "__main__":

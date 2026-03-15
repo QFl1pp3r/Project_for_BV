@@ -46,5 +46,19 @@ services:
       - ./streaming:/app/streaming
       - ./logs:/app/logs
 
+  vulnerable_service:
+    build:
+      context: .
+      dockerfile: vulnerable_service/Dockerfile
+    ports:
+      - "8999:8999"
+    depends_on:
+      - redis
+    restart: always
+    environment:
+      - REDIS_HOST=redis
+    volumes:
+      - ./vulnerable_service/logs:/app/vulnerable_service/logs
+
 volumes:
   redis-data:

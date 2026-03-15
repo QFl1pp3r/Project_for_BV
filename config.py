@@ -31,9 +31,7 @@ INCIDENT_COLUMNS = [
     "technique_id",
 ]
 
-# Report / plots
-FIG_SIZE = (12, 5)
-FIG_DPI = 150
+# Report / charts
 ATTACK_COLORS = {
     "SQLI": "#C1121F",
     "XSS": "#E36414",

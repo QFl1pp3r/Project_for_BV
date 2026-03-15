@@ -44,6 +44,8 @@ return logs
 
 # ML детектор — загружаем один раз при старте
 detector = None
+# Track which IPs have already been analyzed by ML to avoid duplicate reports
+_ml_analyzed_ips = {}
 
 
 def load_detector():
@@ -86,22 +88,28 @@ def flush_logs(ip, logs, threat_level):
                 f.write(f"[{threat_level.upper()}] [{ip}] {line}\n")
 
 
-def run_ml_detection(ip, logs, threat_level):
-    """Прогоняет логи через ML детектор для классификации атак"""
+def run_ml_detection(ip, threat_level):
+    """Fetch ALL logs for this IP from Redis and run ML detection."""
     if detector is None:
         return
 
-    # Парсим raw log строки через существующий parser
-    parsed = []
-    for raw_line in logs:
-        # Убираем UUID префикс, который мы добавили в middleware
-        parts = raw_line.split(" ", 1)
-        if len(parts) == 2:
-            log_line = parts[1]  # всё после UUID
-        else:
-            log_line = raw_line
+    # Get ALL logs for this IP for full-picture ML analysis
+    all_logs = r.lrange(f"logs:{ip}", 0, -1)
+    if not all_logs:
+        return
 
-        result = parse_line(log_line)
+    log_count = len(all_logs)
+
+    # Skip if we already analyzed the same number of logs for this IP
+    prev_count = _ml_analyzed_ips.get(ip, 0)
+    if log_count <= prev_count:
+        return
+    _ml_analyzed_ips[ip] = log_count
+
+    # Parse raw log lines via the existing parser
+    parsed = []
+    for raw_line in all_logs:
+        result = parse_line(raw_line)
         if result:
             parsed.append(result)
 
@@ -113,7 +121,6 @@ def run_ml_detection(ip, logs, threat_level):
         incidents = detector.predict(df)
 
         if incidents:
-            # Записываем инциденты в файл
             with open(ML_INCIDENTS_FILE, "a") as f:
                 for incident in incidents:
                     entry = {
@@ -125,6 +132,7 @@ def run_ml_detection(ip, logs, threat_level):
                         "confidence": incident["confidence"],
                         "request_count": incident["request_count"],
                         "evidence": incident["evidence"],
+                        "detail": f"{incident['type']} from {ip}: {incident['request_count']} requests, confidence {incident['confidence']:.0%}",
                     }
                     f.write(json.dumps(entry, default=str) + "\n")
 
@@ -149,15 +157,13 @@ def route_all_ips():
             keys=[f"logs:{ip}", f"flushed:{ip}"]
         )
 
-        if not logs:
-            continue
+        if logs:
+            # Записываем в файлы
+            flush_logs(ip, logs, threat_level)
 
-        # Записываем в файлы
-        flush_logs(ip, logs, threat_level)
-
-        # При уровне WARNING или ATTACK — прогоняем через ML
+        # При уровне WARNING или ATTACK — прогоняем ML на ВСЕХ логах IP
         if threat_level in ("warning", "attack"):
-            run_ml_detection(ip, logs, threat_level)
+            run_ml_detection(ip, threat_level)
 
 
 def run_loop():

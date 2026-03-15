@@ -1,7 +1,7 @@
 import time
 from streaming.redis_client import r
 
-WINDOW_SECONDS = 300
+WINDOW_SECONDS = 1800  # 30 minutes — long enough for demo/presentation
 
 
 def evict_expired():

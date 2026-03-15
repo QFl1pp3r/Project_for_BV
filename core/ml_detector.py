@@ -16,7 +16,7 @@ from config import (
     MULTI_ATTACK_LABEL,
 )
 from .feature_engineering import align_feature_columns, extract_features
-from .mitre import MITRE, MITRE_DEFAULT, SQLI_RE, XSS_RE
+from .mitre import LOGIN_PATHS, MITRE, MITRE_DEFAULT, SQLI_RE, XSS_RE
 from .parser import build_full_url
 
 
@@ -64,6 +64,50 @@ def _apply_signature_overrides(
         requests.loc[sqli_mask, "ml_confidence"] = requests.loc[sqli_mask, "ml_confidence"].clip(
             lower=MIN_ATTACK_CONFIDENCE
         )
+
+    return requests
+
+
+def _apply_behavioral_rules(requests: pd.DataFrame) -> pd.DataFrame:
+    """Rule-based detection for BRUTE_FORCE and DOS when ML confidence is too low."""
+
+    # --- BRUTE_FORCE: many 401/403 on login paths from same IP ---
+    is_login = requests["path"].fillna("").str.lower().apply(
+        lambda v: v.startswith(LOGIN_PATHS)
+    )
+    is_fail = requests["status"].isin([401, 403])
+    login_fail_mask = is_login & is_fail
+
+    if login_fail_mask.any():
+        for ip, grp in requests[login_fail_mask].groupby("ip"):
+            if len(grp) >= 5:
+                ip_mask = (requests["ip"] == ip) & login_fail_mask
+                still_normal = ip_mask & (requests["ml_label"] == "NORMAL")
+                requests.loc[still_normal, "ml_label"] = "BRUTE_FORCE"
+                requests.loc[still_normal, "ml_confidence"] = requests.loc[
+                    still_normal, "ml_confidence"
+                ].clip(lower=0.75)
+
+    # --- DOS: extremely high request rate from single IP ---
+    for ip, grp in requests.groupby("ip"):
+        if len(grp) < 100:
+            continue
+        normal_mask = (requests["ip"] == ip) & (requests["ml_label"] == "NORMAL")
+        if not normal_mask.any():
+            continue
+        # Check time span: if many requests in short window → DOS
+        ts = grp["ts"].dropna()
+        if len(ts) < 2:
+            continue
+        span_seconds = (ts.max() - ts.min()).total_seconds()
+        if span_seconds <= 0:
+            span_seconds = 1
+        rps = len(grp) / span_seconds
+        if rps >= 5:  # 5+ requests/sec sustained → DOS
+            requests.loc[normal_mask, "ml_label"] = "DOS"
+            requests.loc[normal_mask, "ml_confidence"] = requests.loc[
+                normal_mask, "ml_confidence"
+            ].clip(lower=0.70)
 
     return requests
 
@@ -129,6 +173,7 @@ class MLDetector:
         requests.loc[low_confidence_attack, "ml_label"] = "NORMAL"
         sqli_mask, xss_mask = _build_signature_masks(requests)
         requests = _apply_signature_overrides(requests, sqli_mask=sqli_mask, xss_mask=xss_mask)
+        requests = _apply_behavioral_rules(requests)
         return requests
 
     def predict(self, df: pd.DataFrame) -> list[dict]:

@@ -17,7 +17,7 @@
     .dot-attack { background: #f85149; }
     .stat-value { font-size: 2rem; font-weight: 700; }
     .stat-label { font-size: 0.85rem; color: #8b949e; }
-    .log-line { font-family: monospace; font-size: 0.8rem; padding: 4px 8px; border-bottom: 1px solid #21262d; }
+    .log-line { font-family: monospace; font-size: 0.75rem; padding: 4px 8px; border-bottom: 1px solid #21262d; word-break: break-all; }
     .log-line:last-child { border-bottom: none; }
     .level-normal { border-left: 3px solid #3fb950; }
     .level-suspicious { border-left: 3px solid #d29922; }
@@ -30,7 +30,10 @@
     .table { color: #c9d1d9; }
     .table thead th { border-color: #30363d; color: #8b949e; font-size: 0.8rem; text-transform: uppercase; }
     .table td { border-color: #21262d; }
-    .incident-card { font-size: 0.85rem; padding: 10px; margin-bottom: 6px; background: #1c1218; border: 1px solid #f8514930; border-radius: 8px; }
+    .incident-card { font-size: 0.82rem; padding: 8px 10px; margin-bottom: 4px; background: #1c1218; border: 1px solid #f8514930; border-radius: 8px; }
+    .incident-card .inc-type { color: #f85149; font-weight: 700; }
+    .incident-card .inc-ip { color: #8b949e; }
+    .incident-card .inc-detail { color: #c9d1d9; margin-top: 2px; }
   </style>
 </head>
 <body>
@@ -66,7 +69,7 @@
     <div class="col-md-3">
       <div class="card p-3 text-center">
         <div class="stat-value text-warning" id="stat-suspicious">-</div>
-        <div class="stat-label">Suspicious IPs</div>
+        <div class="stat-label">Suspicious + Warning</div>
       </div>
     </div>
     <div class="col-md-3">
@@ -97,32 +100,30 @@
     </div>
   </div>
 
-  <!-- Timeline + Logs Row -->
+  <!-- ML Detections -->
   <div class="row g-3 mb-4">
-    <div class="col-md-6">
+    <div class="col-12">
       <div class="card">
-        <div class="card-header px-3 py-2">Request Timeline</div>
-        <div class="card-body p-2">
-          <div id="chart-timeline" class="plotly-graph" style="height:280px;"></div>
+        <div class="card-header px-3 py-2 d-flex justify-content-between align-items-center">
+          <span>ML Detected Attacks</span>
+          <span class="badge text-bg-danger" id="ml-count-badge" style="display:none;">0</span>
         </div>
-      </div>
-    </div>
-    <div class="col-md-6">
-      <div class="card">
-        <div class="card-header px-3 py-2">ML Incidents</div>
-        <div class="card-body p-2" id="ml-incidents" style="height:280px; overflow-y:auto;">
-          <p class="text-muted small text-center mt-5">No incidents detected</p>
+        <div class="card-body p-2">
+          <div id="chart-ml-attacks" class="plotly-graph" style="height:180px;"></div>
+          <div id="ml-incidents" style="max-height:200px; overflow-y:auto;">
+            <p class="text-muted small text-center py-2">Waiting for ML analysis...</p>
+          </div>
         </div>
       </div>
     </div>
   </div>
 
-  <!-- IP Table + Live Logs -->
+  <!-- Active IPs (full width) + Live Logs -->
   <div class="row g-3 mb-4">
     <div class="col-md-6">
       <div class="card">
         <div class="card-header px-3 py-2">Active IPs</div>
-        <div class="card-body p-0" style="max-height:400px; overflow-y:auto;">
+        <div class="card-body p-0" style="max-height:600px; overflow-y:auto;">
           <table class="table table-sm mb-0">
             <thead><tr><th>IP</th><th>Requests</th><th>Level</th></tr></thead>
             <tbody id="ip-table-body">
@@ -135,7 +136,7 @@
     <div class="col-md-6">
       <div class="card">
         <div class="card-header px-3 py-2">Live Log Feed</div>
-        <div class="card-body p-0" id="log-feed" style="max-height:400px; overflow-y:auto;">
+        <div class="card-body p-0" id="log-feed" style="max-height:600px; overflow-y:auto;">
           <p class="text-muted small text-center py-3">Waiting for data...</p>
         </div>
       </div>
@@ -151,6 +152,13 @@ const COLORS = {
   warning: '#db6d28',
   attack: '#f85149'
 };
+const ML_ATTACK_COLORS = {
+  SQLI: '#C1121F',
+  XSS: '#E36414',
+  BRUTE_FORCE: '#F4A259',
+  DOS: '#5A189A',
+  UNKNOWN: '#6c757d'
+};
 
 const PLOTLY_LAYOUT = {
   paper_bgcolor: 'rgba(0,0,0,0)',
@@ -161,8 +169,6 @@ const PLOTLY_LAYOUT = {
   yaxis: { gridcolor: '#21262d' }
 };
 
-let timelineData = [];
-const MAX_TIMELINE_POINTS = 60;
 
 function updateStats(data) {
   document.getElementById('stat-total-ips').textContent = data.total_ips;
@@ -176,6 +182,13 @@ function updateLevelChart(data) {
   const levels = ['normal', 'suspicious', 'warning', 'attack'];
   const values = levels.map(l => data.level_counts[l] || 0);
   const colors = levels.map(l => COLORS[l]);
+  const hasData = values.some(v => v > 0);
+
+  if (!hasData) {
+    document.getElementById('chart-levels').innerHTML =
+      '<p class="text-muted small text-center" style="padding-top:120px;">No data yet</p>';
+    return;
+  }
 
   Plotly.react('chart-levels', [{
     values: values,
@@ -194,7 +207,11 @@ function updateLevelChart(data) {
 
 function updateTopIpsChart(data) {
   const ips = data.ips.slice(0, 15);
-  if (ips.length === 0) return;
+  if (ips.length === 0) {
+    document.getElementById('chart-top-ips').innerHTML =
+      '<p class="text-muted small text-center" style="padding-top:120px;">No IPs yet</p>';
+    return;
+  }
 
   const sorted = [...ips].reverse();
   Plotly.react('chart-top-ips', [{
@@ -202,54 +219,15 @@ function updateTopIpsChart(data) {
     x: sorted.map(ip => ip.count),
     type: 'bar',
     orientation: 'h',
-    marker: {
-      color: sorted.map(ip => COLORS[ip.level])
-    }
+    marker: { color: sorted.map(ip => COLORS[ip.level]) },
+    text: sorted.map(ip => ip.count),
+    textposition: 'outside',
+    textfont: { color: '#c9d1d9', size: 10 },
+    hovertemplate: '%{y}: %{x} requests<extra></extra>'
   }], {
     ...PLOTLY_LAYOUT,
-    yaxis: { ...PLOTLY_LAYOUT.yaxis, tickfont: { family: 'monospace', size: 11 } },
-    margin: { t: 10, b: 40, l: 120, r: 20 }
-  }, { responsive: true, displayModeBar: false });
-}
-
-function updateTimeline(data) {
-  const now = new Date();
-  timelineData.push({
-    time: now,
-    normal: data.level_counts.normal || 0,
-    suspicious: data.level_counts.suspicious || 0,
-    warning: data.level_counts.warning || 0,
-    attack: data.level_counts.attack || 0,
-    total: data.total_ips
-  });
-
-  if (timelineData.length > MAX_TIMELINE_POINTS) {
-    timelineData = timelineData.slice(-MAX_TIMELINE_POINTS);
-  }
-
-  const times = timelineData.map(d => d.time);
-
-  Plotly.react('chart-timeline', [
-    {
-      x: times, y: timelineData.map(d => d.normal),
-      name: 'Normal', type: 'scatter', mode: 'lines',
-      line: { color: COLORS.normal, width: 2 }, fill: 'tozeroy',
-      fillcolor: COLORS.normal + '15'
-    },
-    {
-      x: times, y: timelineData.map(d => d.suspicious),
-      name: 'Suspicious', type: 'scatter', mode: 'lines',
-      line: { color: COLORS.suspicious, width: 2 }
-    },
-    {
-      x: times, y: timelineData.map(d => d.attack),
-      name: 'Attack', type: 'scatter', mode: 'lines',
-      line: { color: COLORS.attack, width: 2 }
-    }
-  ], {
-    ...PLOTLY_LAYOUT,
-    showlegend: true,
-    legend: { x: 0, y: 1.15, orientation: 'h', font: { size: 10 } }
+    yaxis: { ...PLOTLY_LAYOUT.yaxis, tickfont: { family: 'monospace', size: 11, color: '#c9d1d9' } },
+    margin: { t: 10, b: 40, l: 120, r: 50 }
   }, { responsive: true, displayModeBar: false });
 }
 
@@ -262,8 +240,8 @@ function updateIpTable(data) {
 
   tbody.innerHTML = data.ips.map(ip => `
     <tr>
-      <td class="ip-badge">${ip.ip}</td>
-      <td>${ip.count}</td>
+      <td class="ip-badge">${escapeHtml(ip.ip)}</td>
+      <td><strong>${ip.count.toLocaleString()}</strong></td>
       <td><span class="status-dot dot-${ip.level}"></span>${ip.level}</td>
     </tr>
   `).join('');
@@ -283,21 +261,68 @@ function updateLogFeed(data) {
 
 function updateMlIncidents(data) {
   const container = document.getElementById('ml-incidents');
-  if (!data.ml_incidents || data.ml_incidents.length === 0) {
-    container.innerHTML = '<p class="text-muted small text-center mt-5">No incidents detected</p>';
+  const badge = document.getElementById('ml-count-badge');
+  const incidents = data.ml_incidents || [];
+
+  if (incidents.length === 0) {
+    container.innerHTML = '<p class="text-muted small text-center py-2">Waiting for ML analysis...</p>';
+    badge.style.display = 'none';
+    document.getElementById('chart-ml-attacks').innerHTML =
+      '<p class="text-muted small text-center" style="padding-top:50px;">No ML detections yet</p>';
     return;
   }
 
-  container.innerHTML = data.ml_incidents.map(inc => `
+  badge.style.display = 'inline';
+  badge.textContent = incidents.length;
+
+  // Build chart: show confidence % per attack type (horizontal bars)
+  const labels = [];
+  const confidences = [];
+  const barColors = [];
+  const hoverTexts = [];
+  incidents.forEach(inc => {
+    const t = (inc.type || 'UNKNOWN').toUpperCase();
+    const conf = Math.round((inc.confidence || 0) * 100);
+    labels.push(t + ' (' + (inc.ip || '?') + ')');
+    confidences.push(conf);
+    barColors.push(ML_ATTACK_COLORS[t] || ML_ATTACK_COLORS.UNKNOWN);
+    hoverTexts.push(t + ': ' + conf + '% — ' + (inc.request_count || '?') + ' reqs');
+  });
+
+  // Reverse so first incident is on top
+  labels.reverse();
+  confidences.reverse();
+  barColors.reverse();
+  hoverTexts.reverse();
+
+  Plotly.react('chart-ml-attacks', [{
+    y: labels, x: confidences, type: 'bar',
+    orientation: 'h',
+    marker: { color: barColors, opacity: 0.9 },
+    text: confidences.map(c => c + '%'),
+    textposition: 'outside',
+    textfont: { color: '#c9d1d9', size: 12 },
+    hovertext: hoverTexts, hoverinfo: 'text'
+  }], {
+    ...PLOTLY_LAYOUT,
+    margin: { t: 5, b: 25, l: 130, r: 50 },
+    xaxis: { ...PLOTLY_LAYOUT.xaxis, range: [0, 105], title: { text: 'Confidence %', font: { size: 10 } } },
+    yaxis: { ...PLOTLY_LAYOUT.yaxis, tickfont: { size: 11, color: '#c9d1d9' } }
+  }, { responsive: true, displayModeBar: false });
+
+  // Incident cards (latest 5)
+  container.innerHTML = incidents.slice(0, 5).map(inc => `
     <div class="incident-card">
-      <strong class="text-danger">${escapeHtml(inc.type || 'UNKNOWN')}</strong>
-      <span class="text-muted ms-2">${escapeHtml(inc.ip || '')}</span>
-      <div class="text-muted mt-1">${escapeHtml(inc.detail || '')}</div>
+      <span class="inc-type">${escapeHtml(inc.type || 'UNKNOWN')}</span>
+      <span class="inc-ip ms-2">${escapeHtml(inc.ip || '')}</span>
+      <span class="text-muted ms-2" style="font-size:0.75rem;">${escapeHtml(inc.threat_level || '')}</span>
+      ${inc.detail ? '<div class="inc-detail">' + escapeHtml(inc.detail) + '</div>' : ''}
     </div>
   `).join('');
 }
 
 function escapeHtml(text) {
+  if (!text) return '';
   const div = document.createElement('div');
   div.textContent = text;
   return div.innerHTML;
@@ -313,18 +338,17 @@ async function fetchAndUpdate() {
     updateStats(data);
     updateLevelChart(data);
     updateTopIpsChart(data);
-    updateTimeline(data);
     updateIpTable(data);
     updateLogFeed(data);
     updateMlIncidents(data);
 
     document.getElementById('connection-status').innerHTML =
-      '<span class="text-success">Connected</span>';
+      '<span class="text-success">&#x25CF; Connected</span>';
     document.getElementById('last-update').textContent =
       'Updated: ' + new Date().toLocaleTimeString();
   } catch (err) {
     document.getElementById('connection-status').innerHTML =
-      '<span class="text-danger">Disconnected</span>';
+      '<span class="text-danger">&#x25CF; Disconnected</span>';
     console.error('Fetch error:', err);
   }
 }

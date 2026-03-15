@@ -24,12 +24,12 @@ from core.ml_detector import MLDetector
 from core.model_metrics import load_model_metrics
 from core.parser import parse_file
 from core.report import (
+    chart_attacks_over_time,
+    chart_confidence_distribution,
+    chart_requests_over_time,
+    chart_top_ips,
     ensure_dir,
     incidents_to_csv,
-    plot_attacks_over_time,
-    plot_confidence_distribution,
-    plot_requests_over_time,
-    plot_top_ips,
 )
 from history_store import delete_entry, get_entry, init_store, load_history, save_history, upsert_entry
 
@@ -206,10 +206,6 @@ def ordered_attack_breakdown(incidents_df: pd.DataFrame) -> list[dict]:
 
 def artifact_paths(tag: str) -> dict[str, str]:
     return {
-        "rps": os.path.join(GEN_DIR, f"rps_{tag}.png"),
-        "topip": os.path.join(GEN_DIR, f"topip_{tag}.png"),
-        "attacks": os.path.join(GEN_DIR, f"attacks_{tag}.png"),
-        "confidence": os.path.join(GEN_DIR, f"confidence_{tag}.png"),
         "csv": os.path.join(GEN_DIR, f"incidents_{tag}.csv"),
     }
 
@@ -229,6 +225,7 @@ def build_history_entry(
     artifacts: dict[str, str],
     analysis_mode: str,
     model_error: Optional[str],
+    charts: Optional[dict] = None,
 ) -> dict:
     return {
         "id": analysis_id,
@@ -241,6 +238,7 @@ def build_history_entry(
         "artifacts": {name: os.path.basename(value) for name, value in artifacts.items()},
         "analysis_mode": analysis_mode,
         "model_error": model_error,
+        "charts": charts or {},
     }
 
 
@@ -263,6 +261,7 @@ def build_history_view(entries: list[dict]) -> list[dict]:
 
 def build_report_context(entry: dict) -> dict:
     artifacts = entry.get("artifacts", {})
+    charts = entry.get("charts", {})
     model_metrics, model_metrics_error = load_model_metrics()
     return {
         "analysis_id": entry.get("id", ""),
@@ -276,10 +275,7 @@ def build_report_context(entry: dict) -> dict:
         "model_error": entry.get("model_error"),
         "model_metrics": build_model_metrics_view(model_metrics),
         "model_metrics_error": model_metrics_error,
-        "chart_rps": url_for("static", filename=f"generated/{os.path.basename(artifacts.get('rps', ''))}"),
-        "chart_topip": url_for("static", filename=f"generated/{os.path.basename(artifacts.get('topip', ''))}"),
-        "chart_attacks": url_for("static", filename=f"generated/{os.path.basename(artifacts.get('attacks', ''))}"),
-        "chart_confidence": url_for("static", filename=f"generated/{os.path.basename(artifacts.get('confidence', ''))}"),
+        "charts": charts,
         "csv_url": url_for("download_csv", fname=os.path.basename(artifacts.get("csv", ""))),
         "delete_url": url_for("delete_analysis", analysis_id=entry.get("id", "")),
         "history_url": url_for("index"),
@@ -332,10 +328,14 @@ def analyze():
 
     analysis_id = build_analysis_id()
     paths = artifact_paths(analysis_id)
-    plot_requests_over_time(df, paths["rps"])
-    plot_top_ips(df, paths["topip"])
-    plot_attacks_over_time(incidents_df, paths["attacks"], min_confidence=MIN_ATTACK_CONFIDENCE)
-    plot_confidence_distribution(incidents_df, paths["confidence"])
+
+    charts = {
+        "rps": chart_requests_over_time(df),
+        "topip": chart_top_ips(df),
+        "attacks": chart_attacks_over_time(incidents_df, min_confidence=MIN_ATTACK_CONFIDENCE),
+        "confidence": chart_confidence_distribution(incidents_df),
+    }
+
     incidents_to_csv(incidents, paths["csv"])
 
     incidents_view = build_incidents_view(incidents)
@@ -349,6 +349,7 @@ def analyze():
         model_error=model_error,
         incidents_view=incidents_view,
         artifacts=paths,
+        charts=charts,
     )
     upsert_entry(HISTORY_FILE, entry)
 
@@ -460,18 +461,24 @@ def streaming_status():
     recent_logs = recent_logs[-30:]
     recent_logs.reverse()
 
-    # ML инциденты
+    # ML инциденты (дедупликация: оставляем последний по ip+type)
     ml_incidents = []
     incidents_file = os.path.join(BASE_DIR, "logs", "ml_incidents.json")
     if os.path.exists(incidents_file):
         try:
             with open(incidents_file, "r") as f:
                 lines = f.readlines()
-                for line in lines[-20:]:
+                seen = {}
+                for line in lines:
                     line = line.strip()
                     if line:
-                        ml_incidents.append(json.loads(line))
-            ml_incidents.reverse()
+                        inc = json.loads(line)
+                        key = (inc.get("ip", ""), inc.get("type", ""))
+                        seen[key] = inc  # последний перезаписывает
+                ml_incidents = list(seen.values())
+                ml_incidents.sort(
+                    key=lambda x: x.get("detected_at", ""), reverse=True
+                )
         except Exception:
             pass
 

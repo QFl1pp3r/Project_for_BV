@@ -8,4 +8,4 @@ catboost_info/*
 .pytest_cache/
 uploads/
 test_logs
-
+vulnerable_service/logs/*

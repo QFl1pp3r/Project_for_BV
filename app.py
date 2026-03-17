@@ -21,7 +21,6 @@ from config import (
     UPLOAD_DIR,
 )
 from core.ml_detector import MLDetector
-from core.model_metrics import load_model_metrics
 from core.parser import parse_file
 from core.report import (
     chart_attacks_over_time,
@@ -62,15 +61,6 @@ def format_ts(value: object) -> str:
         return str(value)
 
 
-def format_pct(value: object) -> str:
-    if value is None:
-        return "n/a"
-    try:
-        return f"{float(value) * 100:.1f}%"
-    except Exception:
-        return "n/a"
-
-
 def format_size(size_bytes: int) -> str:
     units = ["B", "KB", "MB", "GB"]
     size = float(max(0, size_bytes))
@@ -84,39 +74,6 @@ def format_size(size_bytes: int) -> str:
     if unit == "B":
         return f"{int(size)} {unit}"
     return f"{size:.1f} {unit}"
-
-
-def build_model_metrics_view(metrics: Optional[dict]) -> Optional[dict]:
-    if not metrics:
-        return None
-
-    scope_labels = {
-        "internal_holdout_only": "Внутренний holdout",
-    }
-    view = dict(metrics)
-    view["trained_at_fmt"] = format_ts(metrics.get("trained_at"))
-    view["accuracy_fmt"] = format_pct(metrics.get("accuracy"))
-    view["macro_precision_fmt"] = format_pct(metrics.get("macro_precision"))
-    view["macro_recall_fmt"] = format_pct(metrics.get("macro_recall"))
-    view["macro_f1_fmt"] = format_pct(metrics.get("macro_f1"))
-    view["weighted_f1_fmt"] = format_pct(metrics.get("weighted_f1"))
-    view["validation_scope_label"] = scope_labels.get(metrics.get("validation_scope"), metrics.get("validation_scope") or "n/a")
-
-    attack_order = {label: index for index, label in enumerate(ATTACK_LABELS)}
-    per_class_rows = sorted(
-        metrics.get("per_class", []),
-        key=lambda row: (attack_order.get(str(row.get("label")), len(attack_order)), str(row.get("label") or "")),
-    )
-
-    per_class = []
-    for row in per_class_rows:
-        item = dict(row)
-        item["precision_fmt"] = format_pct(row.get("precision"))
-        item["recall_fmt"] = format_pct(row.get("recall"))
-        item["f1_fmt"] = format_pct(row.get("f1"))
-        per_class.append(item)
-    view["per_class"] = per_class
-    return view
 
 
 def validate_upload(file_obj) -> tuple[bool, str]:
@@ -262,7 +219,6 @@ def build_history_view(entries: list[dict]) -> list[dict]:
 def build_report_context(entry: dict) -> dict:
     artifacts = entry.get("artifacts", {})
     charts = entry.get("charts", {})
-    model_metrics, model_metrics_error = load_model_metrics()
     return {
         "analysis_id": entry.get("id", ""),
         "source_name": entry.get("filename", "unknown.log"),
@@ -273,8 +229,6 @@ def build_report_context(entry: dict) -> dict:
         "incidents": entry.get("incidents", []),
         "analysis_mode": entry.get("analysis_mode", "ml"),
         "model_error": entry.get("model_error"),
-        "model_metrics": build_model_metrics_view(model_metrics),
-        "model_metrics_error": model_metrics_error,
         "charts": charts,
         "csv_url": url_for("download_csv", fname=os.path.basename(artifacts.get("csv", ""))),
         "delete_url": url_for("delete_analysis", analysis_id=entry.get("id", "")),

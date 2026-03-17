@@ -107,62 +107,6 @@
     </div>
   </div>
 
-  <div class="card report-card p-3 mb-3">
-    <div class="d-flex justify-content-between align-items-center mb-2">
-      <div>
-        <h2 class="h5 mb-1">Метрики CatBoost</h2>
-        <p class="text-muted small mb-0">Показатели последнего сохраненного обучения модели на holdout-выборке, не на текущем загруженном логе.</p>
-      </div>
-      {% if model_metrics %}
-        <span class="badge rounded-pill text-bg-dark">{{ model_metrics.validation_scope_label }}</span>
-      {% endif %}
-    </div>
-    {% if model_metrics %}
-      <div class="row g-3 mb-3">
-        <div class="col-md-3"><div class="border rounded-3 p-3 bg-light-subtle"><div class="text-muted small">Accuracy</div><div class="h5 mono mb-0">{{ model_metrics.accuracy_fmt }}</div></div></div>
-        <div class="col-md-3"><div class="border rounded-3 p-3 bg-light-subtle"><div class="text-muted small">Macro F1</div><div class="h5 mono mb-0">{{ model_metrics.macro_f1_fmt }}</div></div></div>
-        <div class="col-md-3"><div class="border rounded-3 p-3 bg-light-subtle"><div class="text-muted small">Macro Precision</div><div class="h5 mono mb-0">{{ model_metrics.macro_precision_fmt }}</div></div></div>
-        <div class="col-md-3"><div class="border rounded-3 p-3 bg-light-subtle"><div class="text-muted small">Macro Recall</div><div class="h5 mono mb-0">{{ model_metrics.macro_recall_fmt }}</div></div></div>
-      </div>
-
-      <div class="small text-muted mb-3">
-        Обучено: {{ model_metrics.trained_at_fmt or "n/a" }}.
-        Train/Test: <span class="mono">{{ model_metrics.train_size or "n/a" }}/{{ model_metrics.test_size or "n/a" }}</span>.
-        Iterations: <span class="mono">{{ model_metrics.iterations or "n/a" }}</span>,
-        depth: <span class="mono">{{ model_metrics.depth or "n/a" }}</span>,
-        learning rate: <span class="mono">{{ model_metrics.learning_rate if model_metrics.learning_rate is not none else "n/a" }}</span>.
-        Weighted F1: <span class="mono">{{ model_metrics.weighted_f1_fmt }}</span>.
-      </div>
-
-      <div class="table-responsive mt-2">
-        <table class="table table-sm align-middle">
-          <thead>
-            <tr>
-              <th>Класс</th>
-              <th>Precision</th>
-              <th>Recall</th>
-              <th>F1</th>
-              <th>Support</th>
-            </tr>
-          </thead>
-          <tbody>
-            {% for row in model_metrics.per_class %}
-              <tr>
-                <td><span class="badge rounded-pill text-bg-dark badge-type">{{ row.label }}</span></td>
-                <td class="mono">{{ row.precision_fmt }}</td>
-                <td class="mono">{{ row.recall_fmt }}</td>
-                <td class="mono">{{ row.f1_fmt }}</td>
-                <td class="mono">{{ row.support if row.support is not none else "n/a" }}</td>
-              </tr>
-            {% endfor %}
-          </tbody>
-        </table>
-      </div>
-    {% else %}
-      <p class="text-muted mb-0">{{ model_metrics_error or "Метрики CatBoost пока недоступны." }}</p>
-    {% endif %}
-  </div>
-
   <!-- Chart: Attack Timeline -->
   <div class="card report-card p-3 mb-3">
     <h2 class="h6 mb-1">График атак</h2>
